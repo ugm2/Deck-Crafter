@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "deck_crafter"
+version = "0.1.0"
+description = ""
+authors = ["ugm2 <unaigaraymaestre@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+langchain = "^0.3.2"
+gemini-api = "^0.1.6"
+requests = "^2.32.3"
+langgraph = "^0.2.34"
+langchain-google-vertexai = "^2.0.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
