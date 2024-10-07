@@ -1,10 +1,11 @@
 import json
 import sys
-from typing import TypedDict, List, Optional
+from typing import Dict, TypedDict, List, Optional
 from dataclasses import dataclass
 from deck_crafter.core.llm_service import LLMService, VertexAILLM
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
+from pydantic import BaseModel
 
 
 class LoggerWriter:
@@ -37,36 +38,28 @@ class CardGameState(TypedDict):
 
 @dataclass
 class UserPreferences:
-    theme: Optional[str] = None
-    game_style: Optional[str] = None
-    number_of_players: Optional[str] = None
-    max_unique_cards: Optional[int] = None
-    target_audience: Optional[str] = None
-    rule_complexity: Optional[str] = None
-    language: Optional[str] = "English"
+    theme: Optional[str] = "Fantasía tierra media"
+    game_style: Optional[str] = "Party game"
+    number_of_players: Optional[str] = "4-12"
+    max_unique_cards: Optional[int] = 20
+    target_audience: Optional[str] = "+18"
+    rule_complexity: Optional[str] = "Medio"
+    language: Optional[str] = "Español"
 
 
-@dataclass
-class GameConcept:
-    # Required fields
+class GameConcept(BaseModel):
     theme: str
     title: str
     description: str
     game_style: str
     number_of_players: str
-    number_of_cards: int  # Changed back to required
-
-    # Optional fields
+    number_of_unique_cards: int
     target_audience: Optional[str] = None
     rule_complexity: Optional[str] = None
-    card_distribution: Optional[dict] = None
-
-    def __post_init__(self):
-        self.number_of_cards = int(self.number_of_cards)
+    card_distribution: Optional[Dict[str, int]] = None
 
 
-@dataclass
-class Card:
+class Card(BaseModel):
     # Required fields
     name: str
     type: str  # e.g., Action, Character, Resource
@@ -78,12 +71,11 @@ class Card:
     rarity: Optional[str] = None  # Not all games use rarity
     interactions: Optional[str] = None
 
-    def __repr__(self) -> str:
-        return f"Card(name={self.name}, type={self.type}, effect={self.effect}, cost={self.cost}, flavor_text={self.flavor_text}, rarity={self.rarity}, interactions={self.interactions})"
+    class Config:
+        arbitrary_types_allowed = True
 
 
-@dataclass
-class Rules:
+class Rules(BaseModel):
     # Required fields
     setup: str
     turn_structure: str
@@ -93,20 +85,6 @@ class Rules:
     special_rules: Optional[str] = None
 
 
-def process_json_response(json_response: str) -> dict:
-    json_response = json_response.strip()
-    if json_response.startswith("```json"):
-        json_response = json_response[7:]
-    if json_response.endswith("```"):
-        json_response = json_response[:-3]
-    json_response = json_response.strip()
-    try:
-        json_object = json.loads(json_response)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Failed to decode LLM response as JSON: {e}\n{json_response}")
-    return json_object
-
-
 class ConceptGenerationAgent:
     def __init__(self, llm_service: LLMService):
         self.llm_service = llm_service
@@ -114,108 +92,147 @@ class ConceptGenerationAgent:
     def generate_concept(self, state: CardGameState) -> CardGameState:
         user_prefs = state["user_preferences"]
 
-        # First, determine which fields are required based on user preferences
-        required_fields = {
-            "theme": "The central theme of the game",
-            "title": "A catchy, thematic title",
-            "description": "A brief but clear description of the game",
-            "game_style": "The core gameplay style (e.g., competitive, cooperative)",
-            "number_of_players": "The recommended number of players",
-            "number_of_cards": "Total number of unique cards needed for the game",
-        }
+        # Constructing required and optional fields
+        required_fields = [
+            "theme: The central theme of the game",
+            "title: A catchy, thematic title",
+            "description: A brief but clear description of the game",
+            "game_style: The core gameplay style (e.g., competitive, cooperative)",
+            "number_of_players: The recommended number of players",
+            "number_of_unique_cards: Total number of unique cards needed for the game",
+        ]
 
-        optional_fields = {
-            "target_audience": "Age group or specific audience",
-            "rule_complexity": "Complexity level of the rules",
-            "card_distribution": "Types of cards and their quantities",
-        }
+        optional_fields = [
+            "target_audience: Age group or specific audience",
+            "rule_complexity: Complexity level of the rules",
+            "card_distribution: Types of cards and their quantities",
+        ]
 
         # Move fields from optional to required based on user preferences
         if user_prefs.theme:
-            required_fields["theme"] = (
-                f"Must be related to the user's selected theme: {user_prefs.theme}"
+            required_fields[0] = (
+                f"theme: Must be related to the user's selected theme: {user_prefs.theme}"
             )
-            optional_fields.pop("theme", None)
-
         if user_prefs.game_style:
-            required_fields["game_style"] = (
-                f"Must match user's preference: {user_prefs.game_style}"
+            required_fields[3] = (
+                f"game_style: Must match user's preference: {user_prefs.game_style}"
             )
-            optional_fields.pop("game_style", None)
-
         if user_prefs.target_audience:
-            required_fields["target_audience"] = (
-                f"Must be: {user_prefs.target_audience}"
+            required_fields.append(
+                f"target_audience: Must be: {user_prefs.target_audience}"
             )
-            optional_fields.pop("target_audience", None)
-
+            optional_fields.remove("target_audience: Age group or specific audience")
         if user_prefs.rule_complexity:
-            required_fields["rule_complexity"] = (
-                f"Must be: {user_prefs.rule_complexity}"
+            required_fields.append(
+                f"rule_complexity: Must be: {user_prefs.rule_complexity}"
             )
-            optional_fields.pop("rule_complexity", None)
+            optional_fields.remove("rule_complexity: Complexity level of the rules")
 
-        required_fields = "\n".join(f"- {k}: {v}" for k, v in required_fields.items())
-        optional_fields = "\n".join(f"- {k}: {v}" for k, v in optional_fields.items())
-
+        # Constructing the prompt
         prompt = f"""
+        Persona: You are an expert and very critic card game designer.
         Create a concept for a unique and engaging card game in {user_prefs.language}.
 
         Required fields in your response:
-        {required_fields}
+        {', '.join(f'- {field}' for field in required_fields)}
 
         {'Optional fields (include only if relevant to your game concept):' if optional_fields else ''}
-        {optional_fields}
+        {', '.join(f'- {field}' for field in optional_fields)}
 
         User preferences to incorporate:
         {f'- Maximum unique cards: {user_prefs.max_unique_cards}' if user_prefs.max_unique_cards else '- Choose an appropriate number of unique cards for the game.'}
         {f'- Number of players: {user_prefs.number_of_players}' if user_prefs.number_of_players else ''}
 
         Special instructions:
-        1. The number_of_cards in your response must not exceed {user_prefs.max_unique_cards if user_prefs.max_unique_cards else 'a reasonable number for the game concept'}
+        1. The number_of_unique_cards in your response must not exceed {user_prefs.max_unique_cards if user_prefs.max_unique_cards else 'a reasonable number for the game concept'}
         2. Any user preferences provided above must be strictly followed in your response
         3. Optional fields should only be included if they add value to the game concept
-
-        Format the response as a JSON object with all required fields and any relevant optional fields. Example:
-
-        {{
-            "theme": "The central theme of the game",
-            "title": "A catchy, thematic title",
-            "description": "A brief but clear description of the game",
-            "game_style": "The core gameplay style (e.g., competitive, cooperative)",
-            "number_of_players": "The recommended number of players",
-            "number_of_cards": "Total number of unique cards needed for the game",
-            "target_audience": "Age group or specific audience",
-            "rule_complexity": "Complexity level of the rules",
-            "card_distribution": {{
-                "type1": number,
-                "type2": number,
-                ...
-            }}
-        }}
         """
 
         print("\n[Concept Generation] Generating the game concept...")
         print(f"[Prompt Used]:\n{prompt}\n")
 
-        concept_json = self.llm_service.call_llm(prompt)
-        concept_json = process_json_response(concept_json)
+        game_concept = self.llm_service.call_llm(prompt, records=[GameConcept])
+
+        print(game_concept)
 
         # Override concept values with user preferences if they exist
         if user_prefs.target_audience:
-            concept_json["target_audience"] = user_prefs.target_audience
+            game_concept.target_audience = user_prefs.target_audience
         if user_prefs.game_style:
-            concept_json["game_style"] = user_prefs.game_style
+            game_concept.game_style = user_prefs.game_style
         if user_prefs.number_of_players:
-            concept_json["number_of_players"] = user_prefs.number_of_players
+            game_concept.number_of_players = user_prefs.number_of_players
         if user_prefs.max_unique_cards:
-            concept_json["number_of_cards"] = user_prefs.max_unique_cards
+            game_concept.number_of_unique_cards = user_prefs.max_unique_cards
         if user_prefs.rule_complexity:
-            concept_json["rule_complexity"] = user_prefs.rule_complexity
+            game_concept.rule_complexity = user_prefs.rule_complexity
 
-        # No need to override values here anymore since the LLM will respect user preferences
-        state["game_concept"] = GameConcept(**concept_json)
-        state["current_step"] = "generate_cards"
+        state["game_concept"] = game_concept
+        return state
+
+
+class RuleGenerationAgent:
+    def __init__(self, llm_service: LLMService):
+        self.llm_service = llm_service
+
+    def generate_rules(self, state: CardGameState) -> CardGameState:
+        game_concept = state["game_concept"]
+        user_prefs = state["user_preferences"]
+
+        # Constructing required and optional rule sections
+        required_rules = [
+            "setup: Detailed setup instructions considering the game's theme and components",
+            "turn_structure: Clear explanation of how players take turns and interact with cards",
+            "win_conditions: Specific conditions for winning the game",
+        ]
+
+        optional_rules = []
+        requires_special_rules = hasattr(
+            game_concept, "rule_complexity"
+        ) and game_concept.rule_complexity.lower() in ["medium", "hard", "complex"]
+        if not requires_special_rules:
+            optional_rules.append(
+                "special_rules: Any unique mechanics or interactions between cards"
+            )
+        else:
+            required_rules.append(
+                "special_rules: Required special mechanics based on card interactions"
+            )
+
+        # Constructing the prompt
+        prompt = f"""
+        Persona: You are an expert and very critic card game designer.
+        Create comprehensive rules for the card game: {game_concept.title} in {user_prefs.language}
+        Game concept: {game_concept.description}
+        Theme: {game_concept.theme}
+        Gameplay style: {game_concept.game_style}
+        Rule complexity: {game_concept.rule_complexity}
+        Number of players: {game_concept.number_of_players}
+        Number of unique cards: {game_concept.number_of_unique_cards}
+        
+        Required rule sections:
+        {', '.join(f'- {rule}' for rule in required_rules)}
+
+        {'Optional rule section (include only if relevant):' if optional_rules else ''}
+        {', '.join(f'- {rule}' for rule in optional_rules)}
+        
+        Guidelines for rule creation:
+        1. Ensure rules match the game's complexity level
+        2. Make sure all card types and interactions are covered
+        3. Balance depth of strategy with ease of learning
+        4. Consider the target audience when explaining concepts
+        """
+
+        print("\n[Rule Generation] Generating the rules...")
+        print(f"[Prompt Used]:\n{prompt}\n")
+
+        rules = self.llm_service.call_llm(prompt, records=[Rules])
+
+        print("\n[Rule Generation] Generated rules:")
+        print(rules)
+
+        state["rules"] = rules
         return state
 
 
@@ -225,6 +242,7 @@ class CardGenerationAgent:
 
     def generate_card(self, state: CardGameState) -> CardGameState:
         game_concept = state["game_concept"]
+        rules = state["rules"]
         user_prefs = state["user_preferences"]
         existing_cards = state.get("cards", [])
 
@@ -234,13 +252,9 @@ class CardGenerationAgent:
             if sum(1 for card in existing_cards if card.type == card_type) < count
         }
 
-        if not remaining_types:
-            state["current_step"] = "generate_rules"
-            return state
-
         next_type = max(remaining_types.items(), key=lambda x: x[1])[0]
 
-        # Determine required and optional fields
+        # Constructing required and optional fields
         required_fields = [
             "name: Card name",
             f"type: Must be '{next_type}'",
@@ -277,21 +291,22 @@ class CardGenerationAgent:
                     "interactions: Interactions with other cards/mechanics"
                 )
 
-        required_fields = "\n".join(f"- {field}" for field in required_fields)
-        optional_fields = "\n".join(f"- {field}" for field in optional_fields)
-
+        # Constructing the prompt
         prompt = f"""
+        Persona: You are an expert and very critic card game designer.
         Generate a new card for the game: {game_concept.title} in {user_prefs.language}
         Game description: {game_concept.description}
         Theme: {game_concept.theme}
         Game style: {game_concept.game_style}
         Rule complexity: {game_concept.rule_complexity}
+        Ruleset: {rules}
+        Target audience: {game_concept.target_audience}
 
         Required fields in your response:
-        {required_fields}
+        {', '.join(f'- {field}' for field in required_fields)}
 
         Optional fields (include if relevant):
-        {optional_fields}
+        {', '.join(f'- {field}' for field in optional_fields)}
 
         Current number of cards: {len(existing_cards)}
         List of existing cards:
@@ -310,120 +325,19 @@ class CardGenerationAgent:
         2. Its interactions with existing cards
         3. The game's complexity level
         4. The target audience
-
-        Format the response as a JSON object including all required fields and any relevant optional fields. Example:
-        {{
-            "name": "Card name",
-            "type": "Card type",
-            "effect": "Card's game effect",
-            "cost": "Resource cost to play the card",
-            "flavor_text": "Thematic description",
-            "rarity": "Card rarity (Common, Uncommon, Rare, etc.)",
-            "interactions": "Interactions with other cards/mechanics"
-        }}
         """
         print("\n[Card Generation] Generating cards...")
         print(f"[Prompt Used]:\n{prompt}\n")
 
-        new_card = self.llm_service.call_llm(prompt)
-        new_card = process_json_response(new_card)
+        new_card = self.llm_service.call_llm(prompt, records=[Card])
+
+        print(f"Generated card: {new_card}")
 
         if "cards" not in state:
             state["cards"] = []
-        state["cards"].append(Card(**new_card))
-
-        if len(state["cards"]) >= state["game_concept"].number_of_cards:
-            state["current_step"] = "generate_rules"
+        state["cards"].append(new_card)
 
         return state
-
-
-class RuleGenerationAgent:
-    def __init__(self, llm_service: LLMService):
-        self.llm_service = llm_service
-
-    def generate_rules(self, state: CardGameState) -> CardGameState:
-        game_concept = state["game_concept"]
-        user_prefs = state["user_preferences"]
-        cards = state["cards"]
-
-        # Determine if special rules are required based on game complexity and card interactions
-        requires_special_rules = (
-            hasattr(game_concept, "rule_complexity")
-            and game_concept.rule_complexity.lower() in ["medium", "hard", "complex"]
-            or any(card.interactions for card in cards)
-        )
-
-        required_rules = [
-            "setup: Detailed setup instructions considering the game's theme and components",
-            "turn_structure: Clear explanation of how players take turns and interact with cards",
-            "win_conditions: Specific conditions for winning the game",
-        ]
-
-        optional_rules = []
-        if not requires_special_rules:
-            optional_rules.append(
-                "special_rules: Any unique mechanics or interactions between cards"
-            )
-        else:
-            required_rules.append(
-                "special_rules: Required special mechanics based on card interactions"
-            )
-
-        prompt_parts = [
-            f"Create comprehensive rules for the card game: {game_concept.title} in {user_prefs.language}",
-            f"Game concept: {game_concept.description}",
-            f"Theme: {game_concept.theme}",
-            f"Gameplay style: {game_concept.game_style}",
-            f"Rule complexity: {game_concept.rule_complexity}",
-            f"Number of players: {game_concept.number_of_players}",
-            "\nRequired rule sections:",
-            *[f"- {rule}" for rule in required_rules],
-        ]
-
-        if optional_rules:
-            prompt_parts.extend(
-                [
-                    "\nOptional rule section (include only if relevant):",
-                    *[f"- {rule}" for rule in optional_rules],
-                ]
-            )
-
-        prompt_parts.extend(
-            [
-                "\nHere are all the generated cards:",
-                "\n".join(str(card) for card in cards),
-                "\nGuidelines for rule creation:",
-                "1. Ensure rules match the game's complexity level",
-                "2. Make sure all card types and interactions are covered",
-                "3. Balance depth of strategy with ease of learning",
-                "4. Consider the target audience when explaining concepts",
-                "\nFormat the response as a JSON object with all required fields and any relevant optional fields.",
-                " Example (only these fields, don't include any other):",
-                "{",
-                '  "setup": "Detailed setup instructions considering the game\'s theme and components",',
-                '  "turn_structure": "Clear explanation of how players take turns and interact with cards",',
-                '  "win_conditions": "Specific conditions for winning the game",',
-                '  "special_rules": "Any unique mechanics or interactions between cards",',
-                "}",
-            ]
-        )
-
-        prompt = "\n".join(prompt_parts)
-
-        print("\n[Rule Generation] Generating the rules...")
-        print(f"[Prompt Used]:\n{prompt}\n")
-
-        rules_json = self.llm_service.call_llm(prompt)
-        rules = process_json_response(rules_json)
-
-        state["rules"] = Rules(**rules)
-        state["current_step"] = "finished"
-        return state
-
-
-def should_continue(state: CardGameState) -> str:
-    return state["current_step"]
 
 
 def get_user_preferences():
@@ -434,19 +348,20 @@ def get_user_preferences():
         print(
             "Please provide your preferences for the card game (press Enter to skip):"
         )
-        language = input("Preferred language (default: English): ").strip() or "English"
-        theme = input("Theme (e.g., fantasy, sci-fi): ").strip() or None
+        language = input("Preferred language (default: English): ").strip() or "Español"
+        theme = (
+            input("Theme (e.g., fantasy, sci-fi): ").strip()
+            or "Fantasía tierra media, ambientada en Toledo, España"
+        )
         style = (
             input("Style preference (competitive, cooperative, party game): ").strip()
-            or None
+            or "Party game. Solo cartas, sin tablero. Ninguna carta tiene coste. Que sea un juego similar a Exploding Kittens"
         )
-        players = input("Number of players (e.g., 2-4): ").strip() or None
-        cards_input = input(
-            "Maximum number of unique cards: "
-        ).strip()  # Updated prompt
-        unique_cards = int(cards_input) if cards_input else None
-        audience = input("Target audience (e.g., +10, +18): ").strip() or None
-        complexity = input("Rule complexity (Easy, Medium, Hard): ").strip() or None
+        players = input("Number of players (e.g., 2-4): ").strip() or "4-12"
+        cards_input = input("Maximum number of unique cards: ").strip()
+        unique_cards = int(cards_input) if cards_input.isdigit() else None
+        audience = input("Target audience (e.g., +10, +18): ").strip() or "+18"
+        complexity = input("Rule complexity (Easy, Medium, Hard): ").strip() or "Medio"
     finally:
         # Restore the logger to capture further output
         sys.stdout = original_stdout
@@ -462,9 +377,16 @@ def get_user_preferences():
     )
 
 
+def should_continue(state: CardGameState) -> str:
+    print("\n[Game Status] Current step:", state["current_step"])
+    if len(state["cards"]) < state["game_concept"].number_of_unique_cards:
+        return "generate_cards"  # Continue generating cards if not enough
+    return END
+
+
 # Initialize services and agents
 llm_service = VertexAILLM(
-    model_name="gemini-1.5-pro-002", temperature=0.5, max_output_tokens=2048
+    model_name="gemini-1.5-pro-002", temperature=0.5, max_output_tokens=8192
 )
 
 concept_agent = ConceptGenerationAgent(llm_service)
@@ -474,33 +396,15 @@ rules_agent = RuleGenerationAgent(llm_service)
 # Create the graph
 workflow = StateGraph(CardGameState)
 
-# Add nodes and edges (unchanged)
+# Adding nodes
 workflow.add_node("generate_concept", concept_agent.generate_concept)
-workflow.add_node("generate_cards", card_agent.generate_card)
 workflow.add_node("generate_rules", rules_agent.generate_rules)
+workflow.add_node("generate_cards", card_agent.generate_card)
 
-workflow.add_conditional_edges(
-    "generate_concept",
-    should_continue,
-    {
-        "generate_cards": "generate_cards",
-    },
-)
-
-workflow.add_conditional_edges(
-    "generate_cards",
-    should_continue,
-    {
-        "generate_cards": "generate_cards",
-        "generate_rules": "generate_rules",
-    },
-)
-
-workflow.add_conditional_edges(
-    "generate_rules",
-    should_continue,
-    {"finished": END},
-)
+# Define all edges
+workflow.add_edge("generate_concept", "generate_rules")
+workflow.add_edge("generate_rules", "generate_cards")
+workflow.add_conditional_edges("generate_cards", should_continue)
 
 workflow.set_entry_point("generate_concept")
 
@@ -520,7 +424,7 @@ def generate_card_game() -> CardGameState:
     )
 
     result = app.invoke(
-        initial_state, config={"recursion_limit": 100, "configurable": {"thread_id": 1}}
+        initial_state, config={"recursion_limit": 150, "configurable": {"thread_id": 1}}
     )
     return result
 
