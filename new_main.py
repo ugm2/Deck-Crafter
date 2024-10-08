@@ -1,8 +1,7 @@
-import json
 import sys
 from typing import Dict, TypedDict, List, Optional
 from dataclasses import dataclass
-from deck_crafter.core.llm_service import LLMService, VertexAILLM
+from deck_crafter.services.llm_service import LLMService, VertexAILLM
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel
@@ -90,7 +89,7 @@ class ConceptGenerationAgent:
         self.llm_service = llm_service
 
     def generate_concept(self, state: CardGameState) -> CardGameState:
-        user_prefs = state["user_preferences"]
+        user_preferences = state["user_preferences"]
 
         # Constructing required and optional fields
         required_fields = [
@@ -109,29 +108,29 @@ class ConceptGenerationAgent:
         ]
 
         # Move fields from optional to required based on user preferences
-        if user_prefs.theme:
+        if user_preferences.theme:
             required_fields[0] = (
-                f"theme: Must be related to the user's selected theme: {user_prefs.theme}"
+                f"theme: Must be related to the user's selected theme: {user_preferences.theme}"
             )
-        if user_prefs.game_style:
+        if user_preferences.game_style:
             required_fields[3] = (
-                f"game_style: Must match user's preference: {user_prefs.game_style}"
+                f"game_style: Must match user's preference: {user_preferences.game_style}"
             )
-        if user_prefs.target_audience:
+        if user_preferences.target_audience:
             required_fields.append(
-                f"target_audience: Must be: {user_prefs.target_audience}"
+                f"target_audience: Must be: {user_preferences.target_audience}"
             )
             optional_fields.remove("target_audience: Age group or specific audience")
-        if user_prefs.rule_complexity:
+        if user_preferences.rule_complexity:
             required_fields.append(
-                f"rule_complexity: Must be: {user_prefs.rule_complexity}"
+                f"rule_complexity: Must be: {user_preferences.rule_complexity}"
             )
             optional_fields.remove("rule_complexity: Complexity level of the rules")
 
         # Constructing the prompt
         prompt = f"""
         Persona: You are an expert and very critic card game designer.
-        Create a concept for a unique and engaging card game in {user_prefs.language}.
+        Create a concept for a unique and engaging card game in {user_preferences.language}.
 
         Required fields in your response:
         {', '.join(f'- {field}' for field in required_fields)}
@@ -140,11 +139,11 @@ class ConceptGenerationAgent:
         {', '.join(f'- {field}' for field in optional_fields)}
 
         User preferences to incorporate:
-        {f'- Maximum unique cards: {user_prefs.max_unique_cards}' if user_prefs.max_unique_cards else '- Choose an appropriate number of unique cards for the game.'}
-        {f'- Number of players: {user_prefs.number_of_players}' if user_prefs.number_of_players else ''}
+        {f'- Maximum unique cards: {user_preferences.max_unique_cards}' if user_preferences.max_unique_cards else '- Choose an appropriate number of unique cards for the game.'}
+        {f'- Number of players: {user_preferences.number_of_players}' if user_preferences.number_of_players else ''}
 
         Special instructions:
-        1. The number_of_unique_cards in your response must not exceed {user_prefs.max_unique_cards if user_prefs.max_unique_cards else 'a reasonable number for the game concept'}
+        1. The number_of_unique_cards in your response must not exceed {user_preferences.max_unique_cards if user_preferences.max_unique_cards else 'a reasonable number for the game concept'}
         2. Any user preferences provided above must be strictly followed in your response
         3. Optional fields should only be included if they add value to the game concept
         """
@@ -157,16 +156,16 @@ class ConceptGenerationAgent:
         print(game_concept)
 
         # Override concept values with user preferences if they exist
-        if user_prefs.target_audience:
-            game_concept.target_audience = user_prefs.target_audience
-        if user_prefs.game_style:
-            game_concept.game_style = user_prefs.game_style
-        if user_prefs.number_of_players:
-            game_concept.number_of_players = user_prefs.number_of_players
-        if user_prefs.max_unique_cards:
-            game_concept.number_of_unique_cards = user_prefs.max_unique_cards
-        if user_prefs.rule_complexity:
-            game_concept.rule_complexity = user_prefs.rule_complexity
+        if user_preferences.target_audience:
+            game_concept.target_audience = user_preferences.target_audience
+        if user_preferences.game_style:
+            game_concept.game_style = user_preferences.game_style
+        if user_preferences.number_of_players:
+            game_concept.number_of_players = user_preferences.number_of_players
+        if user_preferences.max_unique_cards:
+            game_concept.number_of_unique_cards = user_preferences.max_unique_cards
+        if user_preferences.rule_complexity:
+            game_concept.rule_complexity = user_preferences.rule_complexity
 
         state["game_concept"] = game_concept
         return state
@@ -178,7 +177,7 @@ class RuleGenerationAgent:
 
     def generate_rules(self, state: CardGameState) -> CardGameState:
         game_concept = state["game_concept"]
-        user_prefs = state["user_preferences"]
+        user_preferences = state["user_preferences"]
 
         # Constructing required and optional rule sections
         required_rules = [
@@ -203,7 +202,7 @@ class RuleGenerationAgent:
         # Constructing the prompt
         prompt = f"""
         Persona: You are an expert and very critic card game designer.
-        Create comprehensive rules for the card game: {game_concept.title} in {user_prefs.language}
+        Create comprehensive rules for the card game: {game_concept.title} in {user_preferences.language}
         Game concept: {game_concept.description}
         Theme: {game_concept.theme}
         Gameplay style: {game_concept.game_style}
@@ -243,7 +242,7 @@ class CardGenerationAgent:
     def generate_card(self, state: CardGameState) -> CardGameState:
         game_concept = state["game_concept"]
         rules = state["rules"]
-        user_prefs = state["user_preferences"]
+        user_preferences = state["user_preferences"]
         existing_cards = state.get("cards", [])
 
         remaining_types = {
@@ -294,7 +293,7 @@ class CardGenerationAgent:
         # Constructing the prompt
         prompt = f"""
         Persona: You are an expert and very critic card game designer.
-        Generate a new card for the game: {game_concept.title} in {user_prefs.language}
+        Generate a new card for the game: {game_concept.title} in {user_preferences.language}
         Game description: {game_concept.description}
         Theme: {game_concept.theme}
         Game style: {game_concept.game_style}
