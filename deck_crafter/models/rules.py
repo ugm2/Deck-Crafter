@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -50,13 +50,13 @@ class Rules(BaseModel):
             "'The player with the most points at the end of 10 rounds wins'."
         ),
     )
-    additional_rules: Optional[str] = Field(
+    additional_rules: Optional[List[str]] = Field(
         None,
         description=(
             "Any additional rules or mechanics that modify the core gameplay. "
             "This can include advanced rules, sudden death conditions, tiebreakers, or game-altering effects. "
-            "Examples: 'Players can discard 2 cards to gain 1 extra action', "
-            "'In the event of a tie, the player with the most resource cards wins'."
+            "Examples: ['Players can discard 2 cards to gain 1 extra action', "
+            "'In the event of a tie, the player with the most resource cards wins']."
         ),
     )
     end_of_round: Optional[str] = Field(

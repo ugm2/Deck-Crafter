@@ -11,4 +11,3 @@ class CardGameState(TypedDict):
     cards: List[Card]
     rules: Rules
     user_preferences: UserPreferences
-    current_step: str

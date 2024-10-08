@@ -1,241 +1,198 @@
 {
     "game_concept": {
-        "theme": "Fantasía tierra media ambientada en Toledo, España",
         "title": "Toledo Trece",
-        "description": "Un juego de cartas explosivo ambientado en las mágicas calles de Toledo. Los jugadores deben usar hechizos y artefactos para evitar ser eliminados por las Trece Campanadas.",
+        "theme": "Fantasía tierra media ambientada en Toledo, España",
+        "description": "Un juego de cartas para adultos ambientado en la mágica ciudad de Toledo. Los jugadores deben usar la astucia, la estrategia y un toque de picardía para ser el último jugador en pie. Combina la diversión y la imprevisibilidad con decisiones estratégicas y humor para adultos.",
         "language": "Español",
-        "game_style": "Un party game con mecánicas similares a Exploding Kittens, pero con giros innovadores que lo diferencian, nada de mencionar algo de un gato explosivo.",
-        "game_duration": "30-45 minutos",
+        "game_style": "Un party game con mecánicas similares a Exploding Kittens, pero con giros innovadores que lo diferencian, nada de mencionar algo de un gato explosivo ni menciones nada relacionado con 'explosivo'.",
         "number_of_players": "4-12",
-        "number_of_unique_cards": 18,
-        "card_distribution": {
-            "Poción de Invisibilidad": 7,
-            "Campanadas de la Catedral": 13,
-            "Escudo del Alcázar": 4,
-            "Maldición del Monstruo del Tajo": 5,
-            "Espada de Toledo": 6,
-            "Portal Dimensional a la Plaza de Zocodover": 4,
-            "Turista Despistado": 8,
-            "Bruja de Toledo": 4,
-            "Mozárabe Astuto": 6,
-            "Fantasma del Cigarral": 5,
-            "Amuleto de la Catedral": 5,
-            "Judío Errante": 2,
-            "El Greco Fantasmal": 3,
-            "Hechizo de Protección": 8,
-            "Duende del Tajo": 3,
-            "Comercio Local": 5,
-            "Estudiante Erasmus": 7,
-            "Guardia Civil": 4
-        },
-        "number_of_total_cards": 78,
-        "card_actions": {
-            "Poción de Invisibilidad": "Evita ser el objetivo de cualquier carta durante una ronda.",
-            "Campanadas de la Catedral": "Si robas esta carta y no tienes una defensa, ¡pierdes!",
-            "Escudo del Alcázar": "Bloquea cualquier efecto de otro jugador en tu turno.",
-            "Maldición del Monstruo del Tajo": "Fuerza a otro jugador a robar dos cartas.",
-            "Espada de Toledo": "Desvía una Campanada a otro jugador.",
-            "Portal Dimensional a la Plaza de Zocodover": "Intercambia tu mano con otro jugador.",
-            "Turista Despistado": "Pierdes tu turno.",
-            "Bruja de Toledo": "Roba una carta a otro jugador.",
-            "Mozárabe Astuto": "Puedes robar la carta de defensa de otro jugador.",
-            "Fantasma del Cigarral": "Mira las tres primeras cartas del mazo.",
-            "Amuleto de la Catedral": "Te protege de la próxima Campanada.",
-            "Comercio Local": "Puedes intercambiar esta carta con otro jugador por una de sus cartas.",
-            "El Greco Fantasmal": "Roba tres cartas.",
-            "Hechizo de Protección": "Bloquea el efecto de una carta de Campanadas.",
-            "Duende del Tajo": "Obliga a otro jugador a descartar una carta.",
-            "Judío Errante": "No te afecta ninguna carta de \"Maldición\".",
-            "Estudiante Erasmus": "Roba dos cartas.",
-            "Guardia Civil": "Cancela el efecto de cualquier carta de personaje."
-        },
-        "target_audience": "+18",
-        "rule_complexity": "Medio"
+        "game_duration": "30-60 minutos",
+        "target_audience": "+18, incluye contenido picante",
+        "rule_complexity": "Reglas fáciles de aprender pero con profundidad estratégica.",
+        "card_types": [
+            {
+                "name": "Hechizo",
+                "description": "Cartas que representan hechizos mágicos con efectos únicos. Algunos hechizos pueden beneficiar al jugador, mientras que otros pueden perjudicar a los oponentes.",
+                "quantity": 20,
+                "unique_cards": 5
+            },
+            {
+                "name": "Defensa",
+                "description": "Cartas que protegen al jugador de los efectos negativos de las cartas de Hechizo.",
+                "quantity": 10,
+                "unique_cards": 2
+            },
+            {
+                "name": "Trampa",
+                "description": "Cartas que causan efectos negativos a otros jugadores. Se pueden colocar boca abajo y se activan cuando otro jugador roba una carta específica.",
+                "quantity": 15,
+                "unique_cards": 3
+            },
+            {
+                "name": "Mazmorra",
+                "description": "Si robas esta carta, quedas fuera del juego a menos que tengas una carta de Defensa. Representan las mazmorras ocultas bajo Toledo.",
+                "quantity": 3,
+                "unique_cards": 1
+            }
+        ]
     },
     "cards": [
         {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
+            "name": "El Conjuro del Mazapán",
+            "quantity": 4,
+            "type": "Hechizo",
+            "description": "El jugador objetivo roba dos cartas. Si alguna de ellas es una carta de Mazmorra, el jugador que usó El Conjuro del Mazapán puede elegir quedarse con una de las cartas robadas (que no sea de Mazmorra) o descartar ambas.",
             "cost": null,
-            "flavor_text": "El repicar ominoso de las campanas de la Catedral te acerca un paso más a la derrota.",
+            "flavor_text": "Tan dulce como peligroso. ¡No te dejes engañar por su delicioso aroma!",
             "rarity": "Común",
-            "interactions": null
+            "interactions": "Interactúa con las cartas de Mazmorra y obliga al oponente a robar cartas, lo que aumenta la posibilidad de caer en una.",
+            "color": null,
+            "image_description": "Una pieza de mazapán brillando con una luz mágica y runas talladas en su superficie."
         },
         {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
+            "name": "La Espada de Toledo",
+            "quantity": 4,
+            "type": "Hechizo",
+            "description": "Roba una carta. Si es una carta de Trampa, puedes jugarla inmediatamente o descartarla. Si no es una carta de Trampa, debes descartarla.",
             "cost": null,
-            "flavor_text": "El lúgubre tañido de las campanas de la Catedral anuncia tu perdición.",
+            "flavor_text": "Forjada en las antiguas fraguas de Toledo, esta espada corta a través de la magia y la intriga.",
             "rarity": "Común",
-            "interactions": null
+            "interactions": "Interactúa con las cartas de Trampa, permitiendo al jugador usarlas estratégicamente.",
+            "color": null,
+            "image_description": "Una espada de acero toledano con empuñadura de oro y grabados mágicos."
         },
         {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
+            "name": "El Velo de la Judería",
+            "quantity": 4,
+            "type": "Hechizo",
+            "description": "Mira las dos primeras cartas del mazo de robo. Puedes elegir descartarlas o dejarlas en su lugar. Si descartas una carta de Mazmorra, robas una carta adicional.",
             "cost": null,
-            "flavor_text": "El eco de las campanas resuena por las calles de Toledo. ¿Será este tu fin?",
+            "flavor_text": "Un antiguo velo que oculta los secretos de la Judería. ¿Te atreves a mirar a través de él?",
             "rarity": "Común",
-            "interactions": null
+            "interactions": "Interactúa con las cartas de Mazmorra y permite al jugador manipular el mazo de robo para evitar caer en una o para beneficiarse de otras cartas.",
+            "color": null,
+            "image_description": "Un velo translúcido con bordados de símbolos cabalísticos, flotando sobre un fondo de laberínticas calles de la Judería."
         },
         {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
+            "name": "La Puerta del Sol",
+            "quantity": 4,
+            "type": "Hechizo",
+            "description": "Elige a un jugador. Intercambia tu mano con la suya.",
             "cost": null,
-            "flavor_text": "La Catedral primada te observa. El sonido de las campanas te recuerda que el tiempo se acaba.",
+            "flavor_text": "Un portal mágico que conecta dos destinos. ¿A dónde te llevará?",
             "rarity": "Común",
-            "interactions": null
+            "interactions": "Interactúa con las manos de los jugadores, creando caos y cambiando las estrategias.",
+            "color": null,
+            "image_description": "Un arco dorado que brilla con energía mágica, con vistas a la Plaza de Zocodover."
         },
         {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
+            "name": "El Hechizo del Alcázar",
+            "quantity": 4,
+            "type": "Hechizo",
+            "description": "Elige a un jugador y roba una carta de su mano al azar. Si robas una carta de Trampa, puedes jugarla inmediatamente o descartarla.",
             "cost": null,
-            "flavor_text": "Las sombras se alargan en Toledo mientras las campanas de la Catedral doblan por ti.",
+            "flavor_text": "Los muros del Alcázar guardan secretos y tesoros. ¿Te atreves a tomar lo que no te pertenece?",
             "rarity": "Común",
-            "interactions": null
+            "interactions": "Interactúa con las cartas de Trampa y permite al jugador robar cartas de la mano de un oponente, creando incertidumbre y posibles ventajas.",
+            "color": null,
+            "image_description": "Una vista imponente del Alcázar de Toledo bajo un cielo estrellado, con una mano espectral extendiéndose desde una de sus ventanas."
         },
         {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
+            "name": "Escudo de la Catedral",
+            "quantity": 2,
+            "type": "Defensa",
+            "description": "Bloquea el efecto de un Hechizo jugado contra ti.",
             "cost": null,
-            "flavor_text": "La campana de la Catedral llama a los pecadores. ¿Serás tú el próximo?",
+            "flavor_text": "La fe te protege de la magia oscura.",
             "rarity": "Común",
-            "interactions": null
+            "interactions": "Bloquea cualquier Hechizo, creando una defensa sólida contra los ataques mágicos.",
+            "color": null,
+            "image_description": "Un escudo con el rosetón de la Catedral de Toledo grabado en él."
         },
         {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
+            "name": "Capa de Invisibilidad del Monasterio",
+            "quantity": 8,
+            "type": "Defensa",
+            "description": "Te protege de cualquier efecto de una carta de Hechizo o Trampa. Descarta la Capa después de usarla.",
             "cost": null,
-            "flavor_text": "Una ráfaga de viento helado recorre Toledo mientras las campanas de la Catedral anuncian tu inminente perdición.",
+            "flavor_text": "Escóndete de las miradas indiscretas y de los hechizos malignos.",
             "rarity": "Común",
-            "interactions": null
+            "interactions": "Bloquea cualquier Hechizo o Trampa, proporcionando una defensa completa pero temporal.",
+            "color": null,
+            "image_description": "Una capa oscura que parece absorber la luz, con el contorno fantasmal del Monasterio de San Juan de los Reyes."
         },
         {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
+            "name": "La Maldición del Greco",
+            "quantity": 5,
+            "type": "Trampa",
+            "description": "Cuando un jugador roba esta carta, debe elegir entre descartar todas las cartas de Hechizo de su mano o perder su próximo turno.",
             "cost": null,
-            "flavor_text": "El toque de las campanas de la Catedral te hiela la sangre. ¿Podrás escapar de tu destino?",
+            "flavor_text": "Una maldición lanzada por el mismísimo Greco. ¿Te atreves a desafiar su arte?",
             "rarity": "Común",
-            "interactions": null
+            "interactions": "Interactúa con las cartas de Hechizo, obligando al jugador a tomar una decisión estratégica: sacrificar su poder mágico o perder un turno.",
+            "color": null,
+            "image_description": "Un autorretrato del Greco con ojos brillantes y una mano extendiendo una maldición."
         },
         {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
+            "name": "Los Susurros de la Catedral",
+            "quantity": 5,
+            "type": "Trampa",
+            "description": "Cuando un jugador roba esta carta, todos los demás jugadores deben descartar una carta al azar de su mano. Si un jugador no tiene cartas en su mano, no descarta ninguna.",
             "cost": null,
-            "flavor_text": "Los ecos de las Trece Campanadas retumban por las calles empedradas de Toledo. El tiempo se agota.",
+            "flavor_text": "Las piedras de la Catedral guardan secretos que pueden volverse en tu contra.",
             "rarity": "Común",
-            "interactions": null
+            "interactions": "Interactúa con las manos de todos los jugadores, creando un efecto de descarte en cadena que puede desestabilizar las estrategias.",
+            "color": null,
+            "image_description": "Un primer plano de las gárgolas de la Catedral de Toledo susurrando entre ellas con una expresión maliciosa."
         },
         {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
+            "name": "El Pacto con el Diablo",
+            "quantity": 5,
+            "type": "Trampa",
+            "description": "Cuando un jugador roba esta carta, debe elegir a otro jugador para que intercambien sus manos. Si el jugador que robó la carta tiene la menor cantidad de cartas en su mano, no pasa nada.",
             "cost": null,
-            "flavor_text": "Bajo la mirada pétrea de la Catedral, el destino llama. Las campanas doblan, y cada tañido te acerca a la oscuridad.",
+            "flavor_text": "Un pacto oscuro hecho en las sombras de Toledo. ¿A quién entregarás tu destino?",
             "rarity": "Común",
-            "interactions": null
+            "interactions": "Interactúa con las manos de los jugadores, forzando intercambios estratégicos y creando incertidumbre.",
+            "color": null,
+            "image_description": "Una figura sombría con cuernos y una capa roja extendiendo una mano hacia un pergamino con runas demoníacas."
         },
         {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
+            "name": "Las Catacumbas de San Román",
+            "quantity": 3,
+            "type": "Mazmorra",
+            "description": "Si robas esta carta, quedas fuera del juego a menos que tengas una carta de Defensa como Escudo de la Catedral o Capa de Invisibilidad del Monasterio.",
             "cost": null,
-            "flavor_text": "Las campanas de la Catedral repican con furia, anunciando la llegada de la medianoche. ¿Lograrás sobrevivir a las Trece Campanadas?",
-            "rarity": "Común",
-            "interactions": null
-        },
-        {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
-            "cost": null,
-            "flavor_text": "A medianoche, las campanas de la Catedral repican, sellando el destino de los desprevenidos.",
-            "rarity": "Común",
-            "interactions": null
-        },
-        {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
-            "cost": null,
-            "flavor_text": "En la hora más oscura, las campanas de la Catedral llaman. ¿Responderás?",
-            "rarity": "Común",
-            "interactions": null
-        },
-        {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
-            "cost": null,
-            "flavor_text": "En el silencio de la noche Toledana, el sonido de las campanas de la Catedral te recuerda tu mortalidad.",
-            "rarity": "Común",
-            "interactions": null
-        },
-        {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
-            "cost": null,
-            "flavor_text": "El reloj de la Puerta del Sol marca la hora. Cada campanada te acerca al abismo.",
-            "rarity": "Común",
-            "interactions": null
-        },
-        {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
-            "cost": null,
-            "flavor_text": "La Catedral observa. Sus campanas doblan por aquellos que no pueden escapar al destino.",
-            "rarity": "Común",
-            "interactions": null
-        },
-        {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
-            "cost": null,
-            "flavor_text": "En la oscuridad de la noche toledana, el siniestro tañido de las campanas de la Catedral presagia tu final.",
-            "rarity": "Común",
-            "interactions": null
-        },
-        {
-            "name": "Campanadas de la Catedral",
-            "type": "Campanadas",
-            "effect": "Si robas esta carta y no tienes una defensa (Amuleto de la Catedral, Hechizo de Protección o Escudo del Alcázar), ¡pierdes! Si tienes más de una defensa, debes descartar una.",
-            "cost": null,
-            "flavor_text": "Las campanas de la Catedral tañen con un sonido espectral, anunciando tu posible final.",
-            "rarity": "Común",
-            "interactions": null
+            "flavor_text": "En las profundidades de Toledo, bajo la iglesia de San Román, se esconden antiguas catacumbas llenas de misterios y peligros. ¿Te atreves a adentrarte en la oscuridad?",
+            "rarity": null,
+            "interactions": "Interactúa con las cartas de Defensa. Si no tienes una, quedas fuera del juego. Representa el peligro constante de las mazmorras ocultas bajo la ciudad de Toledo.",
+            "color": null,
+            "image_description": "Unas escaleras oscuras que descienden hacia una cripta subterránea, con la silueta de la iglesia de San Román al fondo."
         }
     ],
     "rules": {
-        "initial_hands": "Cada jugador roba 4 cartas.",
-        "deck_preparation": "Se mezclan todas las cartas y se colocan boca abajo formando el mazo de robo.",
-        "turn_structure": "En tu turno, robas una carta. Luego, puedes jugar cualquier número de cartas de tu mano. Después de jugar las cartas, termina tu turno.",
-        "reaction_phase": "Los jugadores pueden usar cartas de reacción como \"Escudo del Alcázar\" o \"Hechizo de Protección\" en respuesta a las acciones de otros jugadores, incluso fuera de su turno.",
-        "win_conditions": "El último jugador que quede sin ser eliminado por las Campanadas de la Catedral, gana.",
-        "additional_rules": "Si un jugador roba una carta de \"Campanadas de la Catedral\" y no tiene una carta de \"Hechizo de Protección\", \"Amuleto de la Catedral\", o \"Escudo del Alcázar\", es eliminado. Si un jugador roba una carta de \"Campanadas de la Catedral\", puede jugarla en cualquier momento de su turno para eliminarse a sí mismo.",
-        "end_of_round": "No hay rondas.",
+        "initial_hands": "Cada jugador roba 5 cartas del mazo.",
+        "deck_preparation": "Se mezclan todas las cartas (Hechizo, Defensa, Trampa y Mazmorra) para formar el mazo principal. Se coloca boca abajo en el centro de la mesa.",
+        "turn_structure": "En tu turno, roba una carta del mazo. Luego, puedes jugar una carta de tu mano o descartarla boca arriba en la pila de descarte. Si juegas una carta de Trampa, colócala boca abajo frente a ti. Si robas una carta de Mazmorra y no tienes una carta de Defensa en tu mano, quedas fuera del juego. Si tienes una carta de Defensa, descártala junto con la carta de Mazmorra.",
+        "reaction_phase": "Después de que un jugador roba una carta, los demás jugadores pueden jugar cartas de Hechizo o Trampa en respuesta a la carta robada.",
+        "win_conditions": "El último jugador que queda sin caer en una Mazmorra gana la partida.",
+        "additional_rules": [
+            "Si un jugador roba una carta que activa una Trampa de otro jugador, se aplica el efecto de la Trampa.",
+            "Los efectos de las cartas de Hechizo se aplican inmediatamente después de jugarlas.",
+            "Las cartas de Defensa solo pueden usarse para evitar caer en una Mazmorra.",
+            "Se pueden jugar varias cartas de Hechizo en un mismo turno, siempre y cuando el jugador tenga suficientes cartas en su mano."
+        ],
+        "end_of_round": null,
         "turn_limit": null,
-        "scoring_system": "No hay sistema de puntuación. El juego se gana al ser el último jugador en pie.",
-        "resource_mechanics": "No hay mecánicas de recursos."
+        "scoring_system": null,
+        "resource_mechanics": null
     },
     "user_preferences": {
         "language": "Español",
         "theme": "Fantasía tierra media ambientada en Toledo, España",
-        "game_style": "Un party game con mecánicas similares a Exploding Kittens, pero con giros innovadores que lo diferencian, nada de mencionar algo de un gato explosivo.",
+        "game_style": "Un party game con mecánicas similares a Exploding Kittens, pero con giros innovadores que lo diferencian, nada de mencionar algo de un gato explosivo ni menciones nada relacionado con 'explosivo'.",
         "number_of_players": "4-12",
-        "max_unique_cards": 20,
-        "target_audience": "+18",
-        "rule_complexity": "Medio"
-    },
-    "current_step": "generate_concept"
+        "target_audience": "+18, incluye contenido picante",
+        "rule_complexity": "Reglas fáciles de aprender pero con profundidad estratégica."
+    }
 }

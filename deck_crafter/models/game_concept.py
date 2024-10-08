@@ -1,132 +1,112 @@
-from typing import Dict, Optional
+from typing import List, Optional
 from pydantic import BaseModel, Field
+
+from deck_crafter.models.card_type import CardType
 
 
 class GameConcept(BaseModel):
     """
-    A structured representation of the key components of a card-only game concept.
-    The model defines both required and optional fields necessary for generating
-    and designing the core gameplay, including theme, rules, and player dynamics.
-    These examples cover a wide range of card games, emphasizing that the games
-    are played exclusively with cards, without a board.
+    Represents the core concept of a card-only game.
+    Defines the essential elements required to generate and design the game's foundation,
+    including theme, rules, and player dynamics.
+    This model is intended for the initial game concept generation step.
     """
 
-    theme: str = Field(
-        ...,
-        description=(
-            "The central theme of the game (required). "
-            "Examples: 'Fantasy: Players control wizards battling for supremacy', "
-            "'Sci-Fi: Explore distant planets and engage in intergalactic battles', "
-            "'Pirates: Sail the seas, plunder ships, and search for treasure', "
-            "'Wild West: Become an outlaw or a sheriff and duel your opponents', "
-            "'Post-Apocalyptic: Survive in a world devastated by nuclear war', "
-            "'Zombie Survival: Fight off hordes of zombies while scavenging for supplies', "
-            "'Mythology: Command gods and heroes in epic battles', "
-            "'Cyberpunk: Hack into systems, fight corporate enemies, and survive in a dystopian future'."
-        ),
-    )
     title: str = Field(
         ...,
         description=(
-            "A catchy, thematic title for the game (required). "
-            "Examples: 'Wizards Duel', 'Heroes of Avalon', 'Mystic Forces', "
-            "'Evil Villains', 'Dungeon Crawl', 'Galactic Warfare', 'Pirates of the Abyss', "
-            "'Shadows of the Cybernet', 'Legendary Heist', 'Cursed Kingdoms'."
+            "A compelling and thematic title for the game (**required**). "
+            "Should capture the essence of the game and attract interest. "
+            "Examples: 'Realm of Legends', 'Battle Quest', 'Mystic Journeys', "
+            "'Shadow Hunters', 'Elemental Wars', 'Galactic Conquest', 'Mystery Manor'."
+        ),
+    )
+    theme: str = Field(
+        ...,
+        description=(
+            "The central theme or setting of the game (**required**). "
+            "Defines the game's atmosphere and aesthetic. "
+            "Examples: 'Medieval Fantasy', 'Space Exploration', 'Mythological Creatures', "
+            "'Steampunk Adventure', 'Post-Apocalyptic Survival', 'Superheroes vs. Villains', "
+            "'Mystery and Detective Work'."
         ),
     )
     description: str = Field(
         ...,
         description=(
-            "A brief but clear description of the game (required). "
-            "Examples: 'A fast-paced card game where players summon creatures and cast spells to defeat their enemies', "
-            "'A party game where players take turns eliminating characters from a hidden deck of assassins', "
-            "'A cooperative deck-building game where players work together to fend off waves of monsters', "
-            "'A strategic bluffing game where players try to gather resources while sabotaging their opponents', "
-            "'A card-based survival game where players scavenge for items and fend off zombies'."
+            "A brief overview of the game's premise and objectives (**required**). "
+            "Should provide players with an understanding of the game's core experience. "
+            "Examples: 'Players build armies to conquer territories and defeat opponents', "
+            "'A cooperative game where players team up to solve mysteries', "
+            "'A fast-paced card game focused on resource management and strategy', "
+            "'Players collect sets of artifacts while sabotaging opponents', "
+            "'A bluffing game where deception leads to victory', "
+            "'Navigate a haunted house to uncover secrets before time runs out'."
         ),
     )
     language: str = Field(
         ...,
         description=(
-            "The primary language used in the game (required). "
-            "Examples: 'English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Russian', 'Chinese', 'Japanese'."
+            "The primary language used in the game's text and instructions (**required**). "
+            "Examples: 'English', 'Spanish', 'French', 'German', 'Chinese', 'Japanese', 'Korean'."
         ),
     )
     game_style: str = Field(
         ...,
         description=(
-            "The core gameplay style, e.g., competitive or cooperative (required). "
-            "Examples: 'Competitive', 'Cooperative', 'Bluffing', 'Party game', 'Deck-building'."
-        ),
-    )
-    game_duration: str = Field(
-        ...,
-        description=(
-            "The recommended duration of the game (required). "
-            "Examples: '15-30 minutes', '30-60 minutes', '1-2 hours'."
+            "The core gameplay style or genre (**required**). "
+            "Defines how players interact with the game and each other. "
+            "Examples: 'Competitive', 'Cooperative', 'Deck-Building', 'Bluffing', "
+            "'Set Collection', 'Strategy', 'Party Game', 'Role-Playing', 'Deduction'."
         ),
     )
     number_of_players: str = Field(
         ...,
         description=(
-            "The recommended number of players (required). "
-            "Examples: '2-4 players', '3-6 players', '4-12 players (party game format)', "
-            "'1-5 players (solo mode included)', '2-8 players'."
+            "The recommended number of players (**required**). "
+            "Should specify the minimum and maximum players suitable for the game. "
+            "Examples: '2-4 players', '3-6 players', '1-5 players (includes solo mode)', "
+            "'2-8 players', '4-10 players (ideal for parties)'."
         ),
     )
-    number_of_unique_cards: int = Field(
+    game_duration: str = Field(
         ...,
         description=(
-            "Total number of unique cards needed for the game (required). "
-            "Examples: 10, 15, 20, 30, 40."
-        ),
-    )
-    card_distribution: Dict[str, int] = Field(
-        ...,
-        description=(
-            "A dictionary where each unique card type is a key, and the value is the quantity "
-            "of that specific card in the deck. This directly reflects the number of unique cards. "
-            "Examples: {'Exploding Kitten': 4, 'Defuse': 6, 'Nope': 5, 'Attack': 4, 'Skip': 4, "
-            "'Favor': 4, 'Shuffle': 4, 'See the Future': 5, 'Hairy Potato Cat': 4, 'TacoCat': 4, "
-            "'Cattermelon': 4}. Each card type should be reflected based on gameplay needs. "
-            "Examples: {'Fireball': 3, 'Shield of Protection': 4, 'Summon Dragon': 2, 'Healing Potion': 5, "
-            "'Mana Surge': 6, 'Lightning Strike': 3, 'Teleport': 2, 'Arcane Blast': 4, 'Sword of Valor': 3}, "
-            "{'Space Travel': 4, 'Alien Encounter': 5, 'Resource Mining': 6, 'Black Hole': 2, 'Galactic Trade': 4, "
-            "'Planet Discovery': 3, 'Space Pirates': 4, 'Starship Upgrade': 5, 'Wormhole': 3, 'Asteroid Field': 2}."
-            "Each card type should be reflected based on gameplay needs."
-        ),
-    )
-    number_of_total_cards: int = Field(
-        ...,
-        description=(
-            "Total number of cards in the deck (required)."
-            "Examples: 50, 75, 100, 150, 200."
-        ),
-    )
-    card_actions: Dict[str, str] = Field(
-        None,
-        description=(
-            "Description of each card's action or effect. "
-            "Examples: {'Skip': 'End your turn without drawing', "
-            "'Attack': 'Force the next player to take two turns'}"
+            "The estimated duration of a single game session (**required**). "
+            "Provides players with an idea of how long the game takes to play. "
+            "Examples: '15-30 minutes', '30-60 minutes', '1-2 hours', "
+            "'Variable length depending on player count', 'Approximately 45 minutes'."
         ),
     )
     target_audience: Optional[str] = Field(
         None,
         description=(
-            "Age group or specific audience (optional). "
-            "Examples: 'Family-friendly (Ages 8+)', 'Teenagers (Ages 13+)', 'Adults (+18)', "
-            "'General audience (Ages 10+)', 'Kids (Ages 6+)'."
+            "The intended age group or demographic for the game (**optional**). "
+            "Helps tailor the game's complexity and content appropriately. "
+            "Examples: 'Family-friendly (Ages 8+)', 'Teens and Adults (Ages 13+)', "
+            "'Adults Only (Ages 18+)', 'All Ages', 'Kids (Ages 6+)'."
         ),
     )
     rule_complexity: Optional[str] = Field(
         None,
         description=(
-            "Complexity level of the rules (optional). "
-            "Examples: 'Easy to learn, perfect for casual play', "
-            "'Medium complexity, suitable for experienced gamers', "
-            "'Hard, requiring in-depth strategy and planning', "
-            "'Very simple, party-style game mechanics', "
-            "'Moderate complexity with multiple layers of strategy'."
+            "The complexity level of the game's rules (**optional**). "
+            "Assists in setting expectations for learning and playing the game. "
+            "Examples: 'Simple rules for quick learning', 'Moderate complexity with strategic depth', "
+            "'Advanced rules for experienced players', 'Easy to learn, hard to master', "
+            "'Designed for casual play'."
         ),
     )
+
+    card_types: List[CardType] = Field(
+        ...,
+        description=(
+            "A list of card types or categories included in the game (**required**). "
+            "Each card type defines a group of cards with similar functions or roles. "
+            "This field provides detailed guidance to the CardGenerationAgent."
+        ),
+    )
+
+    @property
+    def number_of_unique_cards(self) -> int:
+        return sum(card_type.unique_cards for card_type in self.card_types)

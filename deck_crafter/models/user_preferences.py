@@ -15,12 +15,11 @@ class UserPreferences(BaseModel):
     number_of_players: Optional[str] = Field(
         "4-12", description="The number of players the game is designed for."
     )
-    max_unique_cards: Optional[int] = Field(
-        20, description="The maximum number of unique cards in the game."
-    )
     target_audience: Optional[str] = Field(
-        "+18", description="The target audience for the game (e.g., age group)."
+        "+18, incluye contenido picante",
+        description="The target audience for the game (e.g., age group).",
     )
     rule_complexity: Optional[str] = Field(
-        "Medio", description="The complexity of the rules (e.g., Easy, Medium, Hard)."
+        "Reglas fáciles de aprender pero con profundidad estratégica.",
+        description="The complexity of the rules (e.g., Easy, Medium, Hard).",
     )

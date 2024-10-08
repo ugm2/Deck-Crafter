@@ -4,62 +4,82 @@ from pydantic import BaseModel, Field
 
 class Card(BaseModel):
     """
-    A model representing a card used in a card-only game.
-    This model can be called multiple times to generate different types of cards such as action, character, resource, etc.
+    Represents a unique card in a card-only game.
+    Each card has attributes that define its role, effects, and interactions within the game.
     """
 
     name: str = Field(
         ...,
         description=(
-            "The name of the card (required). "
-            "Examples: 'Fireball', 'Warrior of the North', 'Elven Archer', 'Healing Potion', 'Ancient Spell'."
+            "The name of the card (**required**). "
+            "Should be unique within the game context. "
+            "Examples: 'Fireball', 'Stealth Assassin', 'Healing Potion', 'Skip Turn', 'Wild Card'."
+        ),
+    )
+    quantity: int = Field(
+        ...,
+        description=(
+            "The number of copies of this card included in the game deck (**required**). "
+            "Examples: 1, 2, 4, 10, 20."
         ),
     )
     type: str = Field(
         ...,
         description=(
-            "The type of card (required). It describes the role of the card, such as Action, Character, Resource, etc. "
-            "Examples: 'Action', 'Character', 'Resource', 'Spell', 'Item', 'Event'."
+            "The category or classification of the card (**required**). "
+            "Must match one of the `CardType.name` values from the `GameConcept`. "
+            "Examples: 'Organ', 'Virus', 'Medicine', 'Attack', 'Defense', 'Spell'."
         ),
     )
-    effect: str = Field(
+    description: str = Field(
         ...,
         description=(
-            "The effect or ability of the card (required). This describes what happens when the card is played. "
-            "Examples: 'Deal 3 damage to any enemy', 'Heal 5 health points to an ally', "
-            "'Draw 2 cards', 'Increase your defense by 2 for the next round', "
-            "'Summon a creature with 4 attack and 3 defense'."
+            "A concise explanation of the card's effect or role in the game (**required**). "
+            "Clearly states what the card does when played. "
+            "Examples: 'Deal 3 damage to an opponent', 'Skip your next turn', "
+            "'Steal a random card from another player'."
         ),
     )
     cost: Optional[str] = Field(
         None,
         description=(
-            "The cost to play the card (optional). Some games might not use costs. "
-            "Examples: '2 mana', '3 energy', '1 resource card', 'No cost'."
+            "The resource or condition required to play the card (**optional**). "
+            "Examples: '2 Mana', 'Discard a card', 'No cost'."
         ),
     )
     flavor_text: Optional[str] = Field(
         None,
         description=(
-            "Flavor text that adds thematic or narrative depth to the card (optional). "
-            "This text doesn’t affect gameplay but adds to the story. "
-            "Examples: 'A blazing inferno summoned from the depths of the underworld', "
-            "'The warrior stands tall, ready to defend his homeland', "
-            "'A potion brewed by the ancient druids of the forest'."
+            "Narrative or thematic text that adds depth to the card (**optional**). "
+            "Examples: 'An ancient spell whispered among the shadows', "
+            "'A warrior with a mysterious past'."
         ),
     )
     rarity: Optional[str] = Field(
         None,
         description=(
-            "The rarity of the card (optional). Not all games use rarity. "
-            "Examples: 'Common', 'Uncommon', 'Rare', 'Legendary'."
+            "The rarity level of the card within the game (**optional**). "
+            "Examples: 'Common', 'Uncommon', 'Rare'."
         ),
     )
     interactions: Optional[str] = Field(
         None,
         description=(
-            "Any special interactions the card might have with other cards or game mechanics (optional). "
-            "Examples: 'Can only be played if a creature is already on the battlefield', "
-            "'This card cannot be countered by trap cards', 'Gains +1 attack for each resource card you control'."
+            "Special interactions this card has with other cards or game mechanics (**optional**). "
+            "Examples: 'Doubles the effect of healing cards', 'Cannot be blocked by defense cards'."
+        ),
+    )
+    color: Optional[str] = Field(
+        None,
+        description=(
+            "The color or suit associated with the card, if applicable (**optional**). "
+            "Examples: 'Red', 'Blue', 'Hearts', 'Spades'."
+        ),
+    )
+    image_description: Optional[str] = Field(
+        None,
+        description=(
+            "A description of the card's artwork or illustration in English only (**optional**). "
+            "Examples: 'A fierce dragon breathing fire', 'A knight in armor wielding a sword'."
         ),
     )

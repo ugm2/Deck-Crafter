@@ -11,6 +11,7 @@ gemini-api = "^0.1.6"
 requests = "^2.32.3"
 langgraph = "^0.2.34"
 langchain-google-vertexai = "^2.0.3"
+python-dotenv = "^1.0.1"
 
 
 [build-system]
