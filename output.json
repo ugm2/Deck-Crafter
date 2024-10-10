@@ -1,10 +1,10 @@
 {
     "game_concept": {
         "title": "Toledo Trece",
-        "theme": "Fantasía tierra media ambientada en Toledo, España",
+        "theme": "Fantasía ambientada en Toledo, España",
         "description": "Un juego de cartas para adultos ambientado en la mágica ciudad de Toledo. Los jugadores deben usar la astucia, la estrategia y un toque de picardía para ser el último jugador en pie. Combina la diversión y la imprevisibilidad con decisiones estratégicas y humor para adultos.",
         "language": "Español",
-        "game_style": "Un party game con mecánicas similares a Exploding Kittens, pero con giros innovadores que lo diferencian, nada de mencionar algo de un gato explosivo ni menciones nada relacionado con 'explosivo'.",
+        "game_style": "Un party game con mecánicas similares a Exploding Kittens, pero con giros innovadores que lo diferencian.",
         "number_of_players": "4-12",
         "game_duration": "30-60 minutos",
         "target_audience": "+18, incluye contenido picante",
@@ -12,26 +12,32 @@
         "card_types": [
             {
                 "name": "Hechizo",
-                "description": "Cartas que representan hechizos mágicos con efectos únicos. Algunos hechizos pueden beneficiar al jugador, mientras que otros pueden perjudicar a los oponentes.",
-                "quantity": 20,
+                "description": "Cartas con efectos únicos que se juegan desde la mano para influir en el juego.",
+                "quantity": 30,
                 "unique_cards": 5
             },
             {
+                "name": "Divina",
+                "description": "Cartas que otorgan habilidades divinas a los jugadores.",
+                "quantity": 3,
+                "unique_cards": 1
+            },
+            {
                 "name": "Defensa",
-                "description": "Cartas que protegen al jugador de los efectos negativos de las cartas de Hechizo.",
-                "quantity": 10,
+                "description": "Cartas que permiten anular efectos negativos de Mazmorras, Hechizos o Trampas.",
+                "quantity": 20,
                 "unique_cards": 2
             },
             {
                 "name": "Trampa",
-                "description": "Cartas que causan efectos negativos a otros jugadores. Se pueden colocar boca abajo y se activan cuando otro jugador roba una carta específica.",
+                "description": "Cartas que se activan cuando un jugador las roba del mazo, causando efectos negativos.",
                 "quantity": 15,
                 "unique_cards": 3
             },
             {
                 "name": "Mazmorra",
-                "description": "Si robas esta carta, quedas fuera del juego a menos que tengas una carta de Defensa. Representan las mazmorras ocultas bajo Toledo.",
-                "quantity": 3,
+                "description": "Cartas que eliminan a un jugador si no tiene una carta de Defensa para anularla.",
+                "quantity": 12,
                 "unique_cards": 1
             }
         ]
@@ -39,73 +45,97 @@
     "cards": [
         {
             "name": "El Conjuro del Mazapán",
-            "quantity": 4,
+            "quantity": 5,
             "type": "Hechizo",
-            "description": "El jugador objetivo roba dos cartas. Si alguna de ellas es una carta de Mazmorra, el jugador que usó El Conjuro del Mazapán puede elegir quedarse con una de las cartas robadas (que no sea de Mazmorra) o descartar ambas.",
+            "description": "Elige a un jugador para que robe dos cartas.",
             "cost": null,
             "flavor_text": "Tan dulce como peligroso. ¡No te dejes engañar por su delicioso aroma!",
             "rarity": "Común",
-            "interactions": "Interactúa con las cartas de Mazmorra y obliga al oponente a robar cartas, lo que aumenta la posibilidad de caer en una.",
+            "interactions": "Incrementa el riesgo para otro jugador al forzarlo a robar cartas.",
             "color": null,
-            "image_description": "Una pieza de mazapán brillando con una luz mágica y runas talladas en su superficie."
+            "image_description": "Una pieza de mazapán brillando con luz mágica y runas talladas."
         },
         {
             "name": "La Espada de Toledo",
-            "quantity": 4,
-            "type": "Hechizo",
-            "description": "Roba una carta. Si es una carta de Trampa, puedes jugarla inmediatamente o descartarla. Si no es una carta de Trampa, debes descartarla.",
+            "quantity": 3,
+            "type": "Divina",
+            "description": "Elige a un jugador. Ese jugador queda eliminado del juego, a menos que juegue inmediatamente una carta de Defensa como 'Escudo de la Catedral' o 'Capa de Invisibilidad del Monasterio' para anular este efecto. Descarta 'La Espada de Toledo' después de usarla.",
             "cost": null,
-            "flavor_text": "Forjada en las antiguas fraguas de Toledo, esta espada corta a través de la magia y la intriga.",
-            "rarity": "Común",
-            "interactions": "Interactúa con las cartas de Trampa, permitiendo al jugador usarlas estratégicamente.",
+            "flavor_text": "La legendaria espada capaz de decidir el destino de cualquiera que se cruce en su camino.",
+            "rarity": "Rara",
+            "interactions": "Permite eliminar a otro jugador, a menos que tenga una carta de Defensa. Añade una capa estratégica al juego al introducir un riesgo directo entre jugadores.",
             "color": null,
-            "image_description": "Una espada de acero toledano con empuñadura de oro y grabados mágicos."
+            "image_description": "Una espada brillante con hoja de acero toledano, emanando un aura poderosa y ancestral."
         },
         {
-            "name": "El Velo de la Judería",
-            "quantity": 4,
+            "name": "El Ojo de la Bruja",
+            "quantity": 5,
             "type": "Hechizo",
-            "description": "Mira las dos primeras cartas del mazo de robo. Puedes elegir descartarlas o dejarlas en su lugar. Si descartas una carta de Mazmorra, robas una carta adicional.",
+            "description": "Mira las tres primeras cartas del mazo de robo. Puedes devolverlas en cualquier orden.",
             "cost": null,
-            "flavor_text": "Un antiguo velo que oculta los secretos de la Judería. ¿Te atreves a mirar a través de él?",
+            "flavor_text": "La visión de la bruja te revela secretos ocultos y te permite alterar el destino.",
             "rarity": "Común",
-            "interactions": "Interactúa con las cartas de Mazmorra y permite al jugador manipular el mazo de robo para evitar caer en una o para beneficiarse de otras cartas.",
+            "interactions": "Permite anticipar y manipular las próximas cartas del mazo.",
             "color": null,
-            "image_description": "Un velo translúcido con bordados de símbolos cabalísticos, flotando sobre un fondo de laberínticas calles de la Judería."
+            "image_description": "Un ojo brillante y místico rodeado de símbolos arcanos."
         },
         {
-            "name": "La Puerta del Sol",
-            "quantity": 4,
+            "name": "La Emboscada del Zocodover",
+            "quantity": 5,
             "type": "Hechizo",
-            "description": "Elige a un jugador. Intercambia tu mano con la suya.",
+            "description": "Termina tu turno sin robar una carta y obliga al siguiente jugador a tomar dos cartas del mazo. Si ese jugador tiene 'La Emboscada del Zocodover', puede jugarla inmediatamente y el siguiente jugador deberá tomar cuatro turnos, y así sucesivamente.",
             "cost": null,
-            "flavor_text": "Un portal mágico que conecta dos destinos. ¿A dónde te llevará?",
+            "flavor_text": "En las calles de Toledo, nunca sabes quién te acecha.",
             "rarity": "Común",
-            "interactions": "Interactúa con las manos de los jugadores, creando caos y cambiando las estrategias.",
+            "interactions": "Fuerza a otros jugadores a tomar más turnos, aumentando su riesgo.",
             "color": null,
-            "image_description": "Un arco dorado que brilla con energía mágica, con vistas a la Plaza de Zocodover."
+            "image_description": "Sombras misteriosas emergiendo en una esquina de la Plaza de Zocodover."
         },
         {
             "name": "El Hechizo del Alcázar",
-            "quantity": 4,
+            "quantity": 5,
             "type": "Hechizo",
-            "description": "Elige a un jugador y roba una carta de su mano al azar. Si robas una carta de Trampa, puedes jugarla inmediatamente o descartarla.",
+            "description": "Elige a un jugador y roba una carta de su que tú elijas.",
             "cost": null,
             "flavor_text": "Los muros del Alcázar guardan secretos y tesoros. ¿Te atreves a tomar lo que no te pertenece?",
             "rarity": "Común",
-            "interactions": "Interactúa con las cartas de Trampa y permite al jugador robar cartas de la mano de un oponente, creando incertidumbre y posibles ventajas.",
+            "interactions": "Permite robar cartas de otros jugadores.",
             "color": null,
-            "image_description": "Una vista imponente del Alcázar de Toledo bajo un cielo estrellado, con una mano espectral extendiéndose desde una de sus ventanas."
+            "image_description": "Una vista imponente del Alcázar de Toledo bajo un cielo estrellado."
+        },
+        {
+            "name": "El Laberinto de Toledo",
+            "quantity": 5,
+            "type": "Hechizo",
+            "description": "Baraja el mazo de robo.",
+            "cost": null,
+            "flavor_text": "Perderse en las calles de Toledo puede cambiar tu destino.",
+            "rarity": "Común",
+            "interactions": "Permite cambiar el orden de las cartas en el mazo.",
+            "color": null,
+            "image_description": "Un laberinto de calles estrechas y empedradas bajo la luz de la luna."
+        },
+        {
+            "name": "El Puente de San Martín",
+            "quantity": 5,
+            "type": "Hechizo",
+            "description": "Termina tu turno sin robar una carta.",
+            "cost": null,
+            "flavor_text": "Un atajo seguro sobre aguas turbulentas.",
+            "rarity": "Común",
+            "interactions": "Permite evitar el riesgo de robar una carta.",
+            "color": null,
+            "image_description": "El Puente de San Martín iluminado por antorchas, cruzando el río Tajo."
         },
         {
             "name": "Escudo de la Catedral",
-            "quantity": 2,
+            "quantity": 12,
             "type": "Defensa",
-            "description": "Bloquea el efecto de un Hechizo jugado contra ti.",
+            "description": "Anula el efecto de una Mazmorra que te afecte. Descarta el Escudo después de usarlo. Coloca la Mazmorra en el mazo de robo en la posición que quieras.",
             "cost": null,
-            "flavor_text": "La fe te protege de la magia oscura.",
+            "flavor_text": "Forjado con la fe de siglos, ningún mal traspasa el escudo sagrado de Toledo.",
             "rarity": "Común",
-            "interactions": "Bloquea cualquier Hechizo, creando una defensa sólida contra los ataques mágicos.",
+            "interactions": "Anula una Mazmorra.",
             "color": null,
             "image_description": "Un escudo con el rosetón de la Catedral de Toledo grabado en él."
         },
@@ -113,79 +143,78 @@
             "name": "Capa de Invisibilidad del Monasterio",
             "quantity": 8,
             "type": "Defensa",
-            "description": "Te protege de cualquier efecto de una carta de Hechizo o Trampa. Descarta la Capa después de usarla.",
+            "description": "Anula el efecto de un Hechizo o Trampa que te afecte. Descarta la Capa después de usarla.",
             "cost": null,
-            "flavor_text": "Escóndete de las miradas indiscretas y de los hechizos malignos.",
+            "flavor_text": "Tejiendo sombras y plegarias, esta capa oculta hasta del ojo más vigilante.",
             "rarity": "Común",
-            "interactions": "Bloquea cualquier Hechizo o Trampa, proporcionando una defensa completa pero temporal.",
+            "interactions": "Anula un Hechizo o Trampa.",
             "color": null,
-            "image_description": "Una capa oscura que parece absorber la luz, con el contorno fantasmal del Monasterio de San Juan de los Reyes."
+            "image_description": "Una capa oscura que parece absorber la luz."
         },
         {
             "name": "La Maldición del Greco",
-            "quantity": 5,
+            "quantity": 4,
             "type": "Trampa",
-            "description": "Cuando un jugador roba esta carta, debe elegir entre descartar todas las cartas de Hechizo de su mano o perder su próximo turno.",
+            "description": "Si robas esta carta, muéstrala a todos. Debes descartar todas las cartas de Hechizo de tu mano. Si no tienes Hechizos, debes robar dos cartas adicionales.",
             "cost": null,
-            "flavor_text": "Una maldición lanzada por el mismísimo Greco. ¿Te atreves a desafiar su arte?",
+            "flavor_text": "Una maldición lanzada por el mismísimo Greco.",
             "rarity": "Común",
-            "interactions": "Interactúa con las cartas de Hechizo, obligando al jugador a tomar una decisión estratégica: sacrificar su poder mágico o perder un turno.",
+            "interactions": "Castiga al jugador que la roba.",
             "color": null,
             "image_description": "Un autorretrato del Greco con ojos brillantes y una mano extendiendo una maldición."
         },
         {
             "name": "Los Susurros de la Catedral",
-            "quantity": 5,
+            "quantity": 4,
             "type": "Trampa",
-            "description": "Cuando un jugador roba esta carta, todos los demás jugadores deben descartar una carta al azar de su mano. Si un jugador no tiene cartas en su mano, no descarta ninguna.",
+            "description": "Si robas esta carta, muéstrala a todos. Debes descartar dos cartas al azar de tu mano (alguien las elige por ti sin mirar).",
             "cost": null,
-            "flavor_text": "Las piedras de la Catedral guardan secretos que pueden volverse en tu contra.",
+            "flavor_text": "Los susurros te confunden y pierdes tus pertenencias.",
             "rarity": "Común",
-            "interactions": "Interactúa con las manos de todos los jugadores, creando un efecto de descarte en cadena que puede desestabilizar las estrategias.",
+            "interactions": "Penaliza al jugador que la roba con pérdida de cartas.",
             "color": null,
-            "image_description": "Un primer plano de las gárgolas de la Catedral de Toledo susurrando entre ellas con una expresión maliciosa."
+            "image_description": "Gárgolas de la Catedral susurrando entre ellas con expresiones siniestras."
         },
         {
             "name": "El Pacto con el Diablo",
-            "quantity": 5,
+            "quantity": 4,
             "type": "Trampa",
-            "description": "Cuando un jugador roba esta carta, debe elegir a otro jugador para que intercambien sus manos. Si el jugador que robó la carta tiene la menor cantidad de cartas en su mano, no pasa nada.",
+            "description": "Si robas esta carta, muéstrala a todos. Debes revelar todas tus cartas al resto del grupo. A cambio, puedes robar dos cartas sin percibir efectos negativos.",
             "cost": null,
-            "flavor_text": "Un pacto oscuro hecho en las sombras de Toledo. ¿A quién entregarás tu destino?",
+            "flavor_text": "Un pacto oscuro que exige un alto precio.",
             "rarity": "Común",
-            "interactions": "Interactúa con las manos de los jugadores, forzando intercambios estratégicos y creando incertidumbre.",
+            "interactions": "Obliga al jugador a perder su mano.",
             "color": null,
-            "image_description": "Una figura sombría con cuernos y una capa roja extendiendo una mano hacia un pergamino con runas demoníacas."
+            "image_description": "Una figura sombría con cuernos extendiendo un pergamino con runas demoníacas."
         },
         {
             "name": "Las Catacumbas de San Román",
-            "quantity": 3,
+            "quantity": 12,
             "type": "Mazmorra",
-            "description": "Si robas esta carta, quedas fuera del juego a menos que tengas una carta de Defensa como Escudo de la Catedral o Capa de Invisibilidad del Monasterio.",
+            "description": "Si robas esta carta, muéstrala a todos. Quedas fuera del juego a menos que tengas un Escudo. Si quedas eliminado, la Mazmorra se descarta del juego.",
             "cost": null,
-            "flavor_text": "En las profundidades de Toledo, bajo la iglesia de San Román, se esconden antiguas catacumbas llenas de misterios y peligros. ¿Te atreves a adentrarte en la oscuridad?",
+            "flavor_text": "En las profundidades, acechan peligros inimaginables.",
             "rarity": null,
-            "interactions": "Interactúa con las cartas de Defensa. Si no tienes una, quedas fuera del juego. Representa el peligro constante de las mazmorras ocultas bajo la ciudad de Toledo.",
+            "interactions": "Elimina al jugador que la roba si no tiene defensa.",
             "color": null,
-            "image_description": "Unas escaleras oscuras que descienden hacia una cripta subterránea, con la silueta de la iglesia de San Román al fondo."
+            "image_description": "Escaleras oscuras descendiendo hacia una cripta subterránea."
         }
     ],
     "rules": {
-        "initial_hands": "Cada jugador roba 5 cartas del mazo.",
-        "deck_preparation": "Se mezclan todas las cartas (Hechizo, Defensa, Trampa y Mazmorra) para formar el mazo principal. Se coloca boca abajo en el centro de la mesa.",
-        "turn_structure": "En tu turno, roba una carta del mazo. Luego, puedes jugar una carta de tu mano o descartarla boca arriba en la pila de descarte. Si juegas una carta de Trampa, colócala boca abajo frente a ti. Si robas una carta de Mazmorra y no tienes una carta de Defensa en tu mano, quedas fuera del juego. Si tienes una carta de Defensa, descártala junto con la carta de Mazmorra.",
-        "reaction_phase": "Después de que un jugador roba una carta, los demás jugadores pueden jugar cartas de Hechizo o Trampa en respuesta a la carta robada.",
-        "win_conditions": "El último jugador que queda sin caer en una Mazmorra gana la partida.",
-        "additional_rules": [
-            "Si un jugador roba una carta que activa una Trampa de otro jugador, se aplica el efecto de la Trampa.",
-            "Los efectos de las cartas de Hechizo se aplican inmediatamente después de jugarlas.",
-            "Las cartas de Defensa solo pueden usarse para evitar caer en una Mazmorra.",
-            "Se pueden jugar varias cartas de Hechizo en un mismo turno, siempre y cuando el jugador tenga suficientes cartas en su mano."
+        "initial_hands": "Cada jugador comienza con 5 cartas en su mano.",
+        "deck_preparation": "Separa las Mazmorras y los escudos del mazo. Reparte un escudo a cada uno. Baraja las cartas del mazo y reparte 5 a cada uno. El resto incluyendo las mazmorras (solo incluye un numero igual al numero de jugadores menos 1) y los escudos, se añaden al mazo restante, se baraja y coloca boca abajo en el centro de la mesa para formar el mazo de robo.",
+        "turn_structure": "En tu turno, puedes jugar cualquier número de cartas de tu mano. Al final de tu turno, debes robar una carta del mazo.",
+        "special_rules": [
+            "Si robas una Mazmorra, debes revelarla y resolver sus efectos inmediatamente. Solamente se puede bloquear con un escudo. Si no puedes bloquearla, estas eliminado del juego y la Mazmorra se descarta. Si la puedes resolver, se devuelve al mazo y la colocas donde quieras.",
+            "Las cartas de Trampa se activan cuando son robadas del mazo y se resuelven inmediatamente.",
+            "Las cartas de Defensa pueden usarse para anular los efectos de Mazmorras, Hechizos o Trampas según se especifique en la carta.",
+            "No hay límite en la cantidad de cartas que puedes tener en tu mano."
         ],
-        "end_of_round": null,
-        "turn_limit": null,
-        "scoring_system": null,
-        "resource_mechanics": null
+        "win_conditions": "El último jugador que quede en el juego gana la partida.",
+        "additional_rules": [
+            "Las cartas jugadas se colocan en la pila de descarte boca arriba.",
+            "Si el mazo de robo se agota, baraja la pila de descarte para formar un nuevo mazo de robo."
+        ]
     },
     "user_preferences": {
         "language": "Español",
