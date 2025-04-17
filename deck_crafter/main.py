@@ -3,7 +3,7 @@ from typing import List, Optional
 from deck_crafter.models.card import Card
 from deck_crafter.models.rules import Rules
 from deck_crafter.workflow.game_workflow import create_game_workflow
-from deck_crafter.services.llm_service import VertexAILLM
+from deck_crafter.services.llm_service import create_llm_service
 from deck_crafter.models.state import CardGameState
 from deck_crafter.models.user_preferences import UserPreferences
 from deck_crafter.utils.config import Config
@@ -69,12 +69,24 @@ def main():
     """
     Main entry point to generate a card game using the game workflow.
     """
-    # Initialize the LLM service
-    llm_service = VertexAILLM(
-        model_name=Config.LLM_MODEL_NAME,
-        temperature=Config.LLM_TEMPERATURE,
-        max_output_tokens=Config.LLM_MAX_OUTPUT_TOKENS,
-    )
+    if Config.LLM_PROVIDER == "vertexai":
+        llm_service = create_llm_service(
+            provider="vertexai",
+            model_name=Config.VERTEXAI_MODEL_NAME,
+            temperature=Config.LLM_TEMPERATURE,
+            max_output_tokens=Config.LLM_MAX_OUTPUT_TOKENS,
+            location=Config.VERTEXAI_LOCATION,
+        )
+    elif Config.LLM_PROVIDER == "ollama":
+        llm_service = create_llm_service(
+            provider="ollama",
+            model_name=Config.OLLAMA_MODEL_NAME,
+            temperature=Config.LLM_TEMPERATURE,
+            max_tokens=Config.LLM_MAX_OUTPUT_TOKENS,
+            base_url=Config.OLLAMA_BASE_URL,
+        )
+    else:
+        raise ValueError(f"Unsupported LLM provider: {Config.LLM_PROVIDER}")
 
     workflow = create_game_workflow(llm_service)
 

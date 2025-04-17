@@ -1,220 +1,192 @@
 {
     "game_concept": {
-        "title": "Toledo Trece",
-        "theme": "Fantasía ambientada en Toledo, España",
-        "description": "Un juego de cartas para adultos ambientado en la mágica ciudad de Toledo. Los jugadores deben usar la astucia, la estrategia y un toque de picardía para ser el último jugador en pie. Combina la diversión y la imprevisibilidad con decisiones estratégicas y humor para adultos.",
+        "title": "Realms of Toledo",
+        "theme": "Fantasía tierra media ambientada en Toledo, España",
+        "description": "In 'Realms of Toledo', players take on the role of powerful nobles vying for control of the city. Each player has a unique ability and must use their cards to outmaneuver their opponents, all while navigating the complex web of alliances and rivalries that define the world of medieval Toledo.",
         "language": "Español",
-        "game_style": "Un party game con mecánicas similares a Exploding Kittens, pero con giros innovadores que lo diferencian.",
+        "game_style": "Un party game con mecánicas similares a Exploding Kittens, pero con giros innovadores que lo diferencian, nada de mencionar algo de un gato explosivo ni menciones nada relacionado con 'explosivo'.",
         "number_of_players": "4-12",
-        "game_duration": "30-60 minutos",
+        "game_duration": "Approximately 45 minutes",
         "target_audience": "+18, incluye contenido picante",
         "rule_complexity": "Reglas fáciles de aprender pero con profundidad estratégica.",
         "card_types": [
             {
-                "name": "Hechizo",
-                "description": "Cartas con efectos únicos que se juegan desde la mano para influir en el juego.",
-                "quantity": 30,
+                "name": "Caballero (Knight)",
+                "description": "These cards represent the noble warriors of Toledo's kingdom. They can be used to attack opponents or defend against their attacks.",
+                "quantity": 15,
                 "unique_cards": 5
             },
             {
-                "name": "Divina",
-                "description": "Cartas que otorgan habilidades divinas a los jugadores.",
-                "quantity": 3,
-                "unique_cards": 1
-            },
-            {
-                "name": "Defensa",
-                "description": "Cartas que permiten anular efectos negativos de Mazmorras, Hechizos o Trampas.",
-                "quantity": 20,
-                "unique_cards": 2
-            },
-            {
-                "name": "Trampa",
-                "description": "Cartas que se activan cuando un jugador las roba del mazo, causando efectos negativos.",
-                "quantity": 15,
+                "name": "Magico (Mage)",
+                "description": "The magical abilities of Toledo's wizards are represented by these cards. They can be used to heal allies, curse opponents, or unleash powerful spells.",
+                "quantity": 10,
                 "unique_cards": 3
             },
             {
-                "name": "Mazmorra",
-                "description": "Cartas que eliminan a un jugador si no tiene una carta de Defensa para anularla.",
+                "name": "Mercenario (Mercenary)",
+                "description": "These cards represent the skilled fighters who serve as mercenaries in Toledo's armies. They can be used to attack opponents or defend against their attacks.",
                 "quantity": 12,
-                "unique_cards": 1
+                "unique_cards": 4
             }
         ]
     },
     "cards": [
         {
-            "name": "El Conjuro del Mazapán",
-            "quantity": 5,
-            "type": "Hechizo",
-            "description": "Elige a un jugador para que robe dos cartas.",
-            "cost": null,
-            "flavor_text": "Tan dulce como peligroso. ¡No te dejes engañar por su delicioso aroma!",
-            "rarity": "Común",
-            "interactions": "Incrementa el riesgo para otro jugador al forzarlo a robar cartas.",
-            "color": null,
-            "image_description": "Una pieza de mazapán brillando con luz mágica y runas talladas."
-        },
-        {
-            "name": "La Espada de Toledo",
+            "name": "Caballero Valiente",
             "quantity": 3,
-            "type": "Divina",
-            "description": "Elige a un jugador. Ese jugador queda eliminado del juego, a menos que juegue inmediatamente una carta de Defensa como 'Escudo de la Catedral' o 'Capa de Invisibilidad del Monasterio' para anular este efecto. Descarta 'La Espada de Toledo' después de usarla.",
+            "type": "Caballero (Knight)",
+            "description": "Ataca a un oponente de 2 daño y defiende contra sus ataques",
             "cost": null,
-            "flavor_text": "La legendaria espada capaz de decidir el destino de cualquiera que se cruce en su camino.",
-            "rarity": "Rara",
-            "interactions": "Permite eliminar a otro jugador, a menos que tenga una carta de Defensa. Añade una capa estratégica al juego al introducir un riesgo directo entre jugadores.",
-            "color": null,
-            "image_description": "Una espada brillante con hoja de acero toledano, emanando un aura poderosa y ancestral."
-        },
-        {
-            "name": "El Ojo de la Bruja",
-            "quantity": 5,
-            "type": "Hechizo",
-            "description": "Mira las tres primeras cartas del mazo de robo. Puedes devolverlas en cualquier orden.",
-            "cost": null,
-            "flavor_text": "La visión de la bruja te revela secretos ocultos y te permite alterar el destino.",
-            "rarity": "Común",
-            "interactions": "Permite anticipar y manipular las próximas cartas del mazo.",
-            "color": null,
-            "image_description": "Un ojo brillante y místico rodeado de símbolos arcanos."
-        },
-        {
-            "name": "La Emboscada del Zocodover",
-            "quantity": 5,
-            "type": "Hechizo",
-            "description": "Termina tu turno sin robar una carta y obliga al siguiente jugador a tomar dos cartas del mazo. Si ese jugador tiene 'La Emboscada del Zocodover', puede jugarla inmediatamente y el siguiente jugador deberá tomar cuatro turnos, y así sucesivamente.",
-            "cost": null,
-            "flavor_text": "En las calles de Toledo, nunca sabes quién te acecha.",
-            "rarity": "Común",
-            "interactions": "Fuerza a otros jugadores a tomar más turnos, aumentando su riesgo.",
-            "color": null,
-            "image_description": "Sombras misteriosas emergiendo en una esquina de la Plaza de Zocodover."
-        },
-        {
-            "name": "El Hechizo del Alcázar",
-            "quantity": 5,
-            "type": "Hechizo",
-            "description": "Elige a un jugador y roba una carta de su que tú elijas.",
-            "cost": null,
-            "flavor_text": "Los muros del Alcázar guardan secretos y tesoros. ¿Te atreves a tomar lo que no te pertenece?",
-            "rarity": "Común",
-            "interactions": "Permite robar cartas de otros jugadores.",
-            "color": null,
-            "image_description": "Una vista imponente del Alcázar de Toledo bajo un cielo estrellado."
-        },
-        {
-            "name": "El Laberinto de Toledo",
-            "quantity": 5,
-            "type": "Hechizo",
-            "description": "Baraja el mazo de robo.",
-            "cost": null,
-            "flavor_text": "Perderse en las calles de Toledo puede cambiar tu destino.",
-            "rarity": "Común",
-            "interactions": "Permite cambiar el orden de las cartas en el mazo.",
-            "color": null,
-            "image_description": "Un laberinto de calles estrechas y empedradas bajo la luz de la luna."
-        },
-        {
-            "name": "El Puente de San Martín",
-            "quantity": 5,
-            "type": "Hechizo",
-            "description": "Termina tu turno sin robar una carta.",
-            "cost": null,
-            "flavor_text": "Un atajo seguro sobre aguas turbulentas.",
-            "rarity": "Común",
-            "interactions": "Permite evitar el riesgo de robar una carta.",
-            "color": null,
-            "image_description": "El Puente de San Martín iluminado por antorchas, cruzando el río Tajo."
-        },
-        {
-            "name": "Escudo de la Catedral",
-            "quantity": 12,
-            "type": "Defensa",
-            "description": "Anula el efecto de una Mazmorra que te afecte. Descarta el Escudo después de usarlo. Coloca la Mazmorra en el mazo de robo en la posición que quieras.",
-            "cost": null,
-            "flavor_text": "Forjado con la fe de siglos, ningún mal traspasa el escudo sagrado de Toledo.",
-            "rarity": "Común",
-            "interactions": "Anula una Mazmorra.",
-            "color": null,
-            "image_description": "Un escudo con el rosetón de la Catedral de Toledo grabado en él."
-        },
-        {
-            "name": "Capa de Invisibilidad del Monasterio",
-            "quantity": 8,
-            "type": "Defensa",
-            "description": "Anula el efecto de un Hechizo o Trampa que te afecte. Descarta la Capa después de usarla.",
-            "cost": null,
-            "flavor_text": "Tejiendo sombras y plegarias, esta capa oculta hasta del ojo más vigilante.",
-            "rarity": "Común",
-            "interactions": "Anula un Hechizo o Trampa.",
-            "color": null,
-            "image_description": "Una capa oscura que parece absorber la luz."
-        },
-        {
-            "name": "La Maldición del Greco",
-            "quantity": 4,
-            "type": "Trampa",
-            "description": "Si robas esta carta, muéstrala a todos. Debes descartar todas las cartas de Hechizo de tu mano. Si no tienes Hechizos, debes robar dos cartas adicionales.",
-            "cost": null,
-            "flavor_text": "Una maldición lanzada por el mismísimo Greco.",
-            "rarity": "Común",
-            "interactions": "Castiga al jugador que la roba.",
-            "color": null,
-            "image_description": "Un autorretrato del Greco con ojos brillantes y una mano extendiendo una maldición."
-        },
-        {
-            "name": "Los Susurros de la Catedral",
-            "quantity": 4,
-            "type": "Trampa",
-            "description": "Si robas esta carta, muéstrala a todos. Debes descartar dos cartas al azar de tu mano (alguien las elige por ti sin mirar).",
-            "cost": null,
-            "flavor_text": "Los susurros te confunden y pierdes tus pertenencias.",
-            "rarity": "Común",
-            "interactions": "Penaliza al jugador que la roba con pérdida de cartas.",
-            "color": null,
-            "image_description": "Gárgolas de la Catedral susurrando entre ellas con expresiones siniestras."
-        },
-        {
-            "name": "El Pacto con el Diablo",
-            "quantity": 4,
-            "type": "Trampa",
-            "description": "Si robas esta carta, muéstrala a todos. Debes revelar todas tus cartas al resto del grupo. A cambio, puedes robar dos cartas sin percibir efectos negativos.",
-            "cost": null,
-            "flavor_text": "Un pacto oscuro que exige un alto precio.",
-            "rarity": "Común",
-            "interactions": "Obliga al jugador a perder su mano.",
-            "color": null,
-            "image_description": "Una figura sombría con cuernos extendiendo un pergamino con runas demoníacas."
-        },
-        {
-            "name": "Las Catacumbas de San Román",
-            "quantity": 12,
-            "type": "Mazmorra",
-            "description": "Si robas esta carta, muéstrala a todos. Quedas fuera del juego a menos que tengas un Escudo. Si quedas eliminado, la Mazmorra se descarta del juego.",
-            "cost": null,
-            "flavor_text": "En las profundidades, acechan peligros inimaginables.",
+            "flavor_text": null,
             "rarity": null,
-            "interactions": "Elimina al jugador que la roba si no tiene defensa.",
+            "interactions": null,
             "color": null,
-            "image_description": "Escaleras oscuras descendiendo hacia una cripta subterránea."
+            "image_description": null
+        },
+        {
+            "name": "Caballero Avispado",
+            "quantity": 3,
+            "type": "Caballero (Knight)",
+            "description": "Ataca a un oponente de 1 daño y defiende contra sus ataques, pero tiene una probabilidad del 20% de ser neutralizado por un hechizo curador",
+            "cost": null,
+            "flavor_text": null,
+            "rarity": null,
+            "interactions": null,
+            "color": null,
+            "image_description": null
+        },
+        {
+            "name": "Caballero Valiente",
+            "quantity": 3,
+            "type": "Caballero (Knight)",
+            "description": "Ataca a un oponente de 2 daño y defiende contra sus ataques",
+            "cost": null,
+            "flavor_text": null,
+            "rarity": null,
+            "interactions": null,
+            "color": null,
+            "image_description": null
+        },
+        {
+            "name": "Caballero Corazón Valiente",
+            "quantity": 2,
+            "type": "Caballero (Knight)",
+            "description": "Ataca a un oponente de 1 daño y defiende contra sus ataques, pero tiene una probabilidad del 30% de ser neutralizado por un hechizo curador",
+            "cost": null,
+            "flavor_text": null,
+            "rarity": null,
+            "interactions": null,
+            "color": null,
+            "image_description": null
+        },
+        {
+            "name": "Caballero Valiente Renegado",
+            "quantity": 2,
+            "type": "Caballero (Knight)",
+            "description": "Ataca a un oponente de 1 daño y defiende contra sus ataques, pero tiene una probabilidad del 20% de ser neutralizado por un hechizo curador",
+            "cost": null,
+            "flavor_text": null,
+            "rarity": null,
+            "interactions": null,
+            "color": null,
+            "image_description": null
+        },
+        {
+            "name": "Luz de Toledo",
+            "quantity": 4,
+            "type": "Magico (Mage)",
+            "description": "Curar a un aliado de 2 puntos de vida y aumenta su resistencia al daño en un 20% durante 1 turno",
+            "cost": null,
+            "flavor_text": null,
+            "rarity": null,
+            "interactions": null,
+            "color": null,
+            "image_description": null
+        },
+        {
+            "name": "Fuego Mágico",
+            "quantity": 3,
+            "type": "Magico (Mage)",
+            "description": "Curar a un aliado de 1 punto de vida y aumenta su resistencia al daño en un 10% durante 1 turno",
+            "cost": null,
+            "flavor_text": null,
+            "rarity": null,
+            "interactions": null,
+            "color": null,
+            "image_description": null
+        },
+        {
+            "name": "Fuerza de la Tierra",
+            "quantity": 3,
+            "type": "Magico (Mage)",
+            "description": "Curar a un aliado de 2 puntos de vida y aumenta su resistencia al daño en un 15% durante 1 turno",
+            "cost": null,
+            "flavor_text": null,
+            "rarity": null,
+            "interactions": null,
+            "color": null,
+            "image_description": null
+        },
+        {
+            "name": "Mercenario Valiente",
+            "quantity": 3,
+            "type": "Mercenario (Mercenary)",
+            "description": "Ataca a un oponente de 1 daño y defiende contra sus ataques, pero tiene una probabilidad del 10% de ser neutralizado por un hechizo curador",
+            "cost": null,
+            "flavor_text": null,
+            "rarity": null,
+            "interactions": null,
+            "color": null,
+            "image_description": null
+        },
+        {
+            "name": "Asaltante Silencioso",
+            "quantity": 3,
+            "type": "Mercenario (Mercenary)",
+            "description": "Ataca a un oponente de 1 daño y defiende contra sus ataques, pero tiene una probabilidad del 20% de ser neutralizado por un hechizo curador",
+            "cost": null,
+            "flavor_text": null,
+            "rarity": null,
+            "interactions": null,
+            "color": null,
+            "image_description": null
+        },
+        {
+            "name": "Asaltante Silencioso",
+            "quantity": 3,
+            "type": "Mercenario (Mercenary)",
+            "description": "Ataca a un oponente de 1 daño y defiende contra sus ataques, pero tiene una probabilidad del 20% de ser neutralizado por un hechizo curador",
+            "cost": null,
+            "flavor_text": null,
+            "rarity": null,
+            "interactions": null,
+            "color": null,
+            "image_description": null
+        },
+        {
+            "name": "Asaltante Silencioso II",
+            "quantity": 1,
+            "type": "Mercenario (Mercenary)",
+            "description": "Ataca a un oponente de 2 daño y defiende contra sus ataques, pero tiene una probabilidad del 30% de ser neutralizado por un hechizo curador",
+            "cost": null,
+            "flavor_text": null,
+            "rarity": null,
+            "interactions": null,
+            "color": null,
+            "image_description": null
         }
     ],
     "rules": {
-        "initial_hands": "Cada jugador comienza con 5 cartas en su mano.",
-        "deck_preparation": "Separa las Mazmorras y los escudos del mazo. Reparte un escudo a cada uno. Baraja las cartas del mazo y reparte 5 a cada uno. El resto incluyendo las mazmorras (solo incluye un numero igual al numero de jugadores menos 1) y los escudos, se añaden al mazo restante, se baraja y coloca boca abajo en el centro de la mesa para formar el mazo de robo.",
-        "turn_structure": "En tu turno, puedes jugar cualquier número de cartas de tu mano. Al final de tu turno, debes robar una carta del mazo.",
-        "special_rules": [
-            "Si robas una Mazmorra, debes revelarla y resolver sus efectos inmediatamente. Solamente se puede bloquear con un escudo. Si no puedes bloquearla, estas eliminado del juego y la Mazmorra se descarta. Si la puedes resolver, se devuelve al mazo y la colocas donde quieras.",
-            "Las cartas de Trampa se activan cuando son robadas del mazo y se resuelven inmediatamente.",
-            "Las cartas de Defensa pueden usarse para anular los efectos de Mazmorras, Hechizos o Trampas según se especifique en la carta.",
-            "No hay límite en la cantidad de cartas que puedes tener en tu mano."
-        ],
-        "win_conditions": "El último jugador que quede en el juego gana la partida.",
-        "additional_rules": [
-            "Las cartas jugadas se colocan en la pila de descarte boca arriba.",
-            "Si el mazo de robo se agota, baraja la pila de descarte para formar un nuevo mazo de robo."
-        ]
+        "initial_hands": "Each player starts with two cards.",
+        "deck_preparation": "The deck is shuffled at the start of each round.",
+        "turn_structure": "Players take turns in a clockwise direction, with each turn consisting of two phases: Draw and Action.",
+        "reaction_phase": null,
+        "win_conditions": "A player wins by having more points than their opponents, or by being the last player remaining if all other players have run out of cards.",
+        "additional_rules": null,
+        "end_of_round": null,
+        "turn_limit": null,
+        "scoring_system": null,
+        "resource_mechanics": null
     },
     "user_preferences": {
         "language": "Español",

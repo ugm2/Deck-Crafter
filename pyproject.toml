@@ -1,19 +1,15 @@
-[tool.poetry]
-name = "deck_crafter"
+[project]
+name = "deck-crafter"
 version = "0.1.0"
 description = ""
-authors = ["ugm2 <unaigaraymaestre@gmail.com>"]
-
-[tool.poetry.dependencies]
-python = "^3.10"
-langchain = "^0.3.2"
-gemini-api = "^0.1.6"
-requests = "^2.32.3"
-langgraph = "^0.2.34"
-langchain-google-vertexai = "^2.0.3"
-python-dotenv = "^1.0.1"
-
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires-python = ">=3.11"
+dependencies = [
+    "gemini-api>=0.1.6",
+    "langchain>=0.3.23",
+    "langchain-community>=0.3.21",
+    "langchain-google-vertexai>=2.0.20",
+    "langchain-ollama>=0.3.2",
+    "langgraph>=0.3.30",
+    "python-dotenv>=1.1.0",
+    "requests>=2.32.3",
+]
