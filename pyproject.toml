@@ -10,6 +10,7 @@ dependencies = [
     "langchain-google-vertexai>=2.0.20",
     "langchain-ollama>=0.3.2",
     "langgraph>=0.3.30",
+    "langsmith>=0.3.31",
     "python-dotenv>=1.1.0",
     "requests>=2.32.3",
 ]

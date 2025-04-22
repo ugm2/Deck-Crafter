@@ -26,6 +26,7 @@ class CardGenerationAgent:
         Quantity for this card: {quantity}
 
         Ensure the new card fits into the overall game strategy, interacts well with existing cards, matches the game's complexity level, and aligns with the game concept.
+        Make sure to use '{game_concept[language]}' as the language when writing the card.
         """
     )
 
@@ -150,7 +151,6 @@ class CardGenerationAgent:
 
     def base_quantity(self, card_type: CardType) -> int:
         return card_type.quantity // card_type.unique_cards
-
     def _prepare_context(
         self,
         game_concept: GameConcept,
@@ -179,3 +179,4 @@ class CardGenerationAgent:
             return result
         else:
             return None  # Handle the failure case appropriately
+

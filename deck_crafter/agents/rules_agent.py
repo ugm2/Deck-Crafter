@@ -15,6 +15,7 @@ class RuleGenerationAgent:
         Game Concept: {game_concept}
 
         Ensure the rules are clear, balanced, and suitable for the game and target audience.
+        Make sure to use '{game_concept[language]}' as the language when writing the rules.
         """
     )
 

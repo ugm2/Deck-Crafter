@@ -260,6 +260,7 @@ dependencies = [
     { name = "langchain-google-vertexai" },
     { name = "langchain-ollama" },
     { name = "langgraph" },
+    { name = "langsmith" },
     { name = "python-dotenv" },
     { name = "requests" },
 ]
@@ -272,6 +273,7 @@ requires-dist = [
     { name = "langchain-google-vertexai", specifier = ">=2.0.20" },
     { name = "langchain-ollama", specifier = ">=0.3.2" },
     { name = "langgraph", specifier = ">=0.3.30" },
+    { name = "langsmith", specifier = ">=0.3.31" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "requests", specifier = ">=2.32.3" },
 ]
