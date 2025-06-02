@@ -37,8 +37,11 @@ class CardGenerationAgent:
         self.base_prompt = base_prompt or self.DEFAULT_PROMPT
 
     def generate_card(self, state: CardGameState) -> CardGameState:
-        game_concept: GameConcept = state["game_concept"]
-        existing_cards: List[Card] = state.get("cards", [])
+        game_concept: GameConcept = state.concept
+        # Initialize state.cards to an empty list if it's None
+        if state.cards is None:
+            state.cards = []
+        existing_cards: List[Card] = state.cards
 
         if len(existing_cards) >= game_concept.number_of_unique_cards:
             # All cards have been generated
@@ -64,7 +67,7 @@ class CardGenerationAgent:
 
         if new_card:
             existing_cards.append(new_card)
-            state["cards"] = existing_cards
+            state.cards = existing_cards
         else:
             # Handle generation failure as needed
             pass
@@ -170,10 +173,10 @@ class CardGenerationAgent:
         return context
 
     def _generate_new_card(self, context: Dict) -> Optional[Card]:
-        result = self.llm_service.call_llm(
-            structured_outputs=[Card],
-            prompt_template=self.base_prompt,
-            context=context,
+        result = self.llm_service.generate(
+            output_model=Card,
+            prompt=self.base_prompt,
+            **context
         )
         if result:
             return result

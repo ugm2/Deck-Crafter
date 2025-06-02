@@ -4,6 +4,7 @@ version = "0.1.0"
 description = ""
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.115.12",
     "gemini-api>=0.1.6",
     "langchain>=0.3.23",
     "langchain-community>=0.3.21",
@@ -11,6 +12,11 @@ dependencies = [
     "langchain-ollama>=0.3.2",
     "langgraph>=0.3.30",
     "langsmith>=0.3.31",
+    "pydantic>=2.11.3",
     "python-dotenv>=1.1.0",
+    "python-multipart>=0.0.20",
     "requests>=2.32.3",
+    "streamlit>=1.45.1",
+    "uvicorn>=0.34.2",
+    "watchdog>=6.0.0",
 ]

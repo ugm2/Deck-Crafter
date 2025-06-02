@@ -69,20 +69,12 @@ def main():
     """
     Main entry point to generate a card game using the game workflow.
     """
-    if Config.LLM_PROVIDER == "vertexai":
-        llm_service = create_llm_service(
-            provider="vertexai",
-            model_name=Config.VERTEXAI_MODEL_NAME,
-            temperature=Config.LLM_TEMPERATURE,
-            max_output_tokens=Config.LLM_MAX_OUTPUT_TOKENS,
-            location=Config.VERTEXAI_LOCATION,
-        )
-    elif Config.LLM_PROVIDER == "ollama":
+    if Config.LLM_PROVIDER == "ollama":
         llm_service = create_llm_service(
             provider="ollama",
-            model_name=Config.OLLAMA_MODEL_NAME,
+            model=Config.OLLAMA_MODEL,
             temperature=Config.LLM_TEMPERATURE,
-            max_tokens=Config.LLM_MAX_OUTPUT_TOKENS,
+            num_predict=Config.LLM_MAX_OUTPUT_TOKENS,
             base_url=Config.OLLAMA_BASE_URL,
         )
     else:

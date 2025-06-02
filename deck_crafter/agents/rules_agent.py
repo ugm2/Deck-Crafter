@@ -3,31 +3,28 @@ from deck_crafter.models.game_concept import GameConcept
 from deck_crafter.models.rules import Rules
 from deck_crafter.models.state import CardGameState
 from deck_crafter.services.llm_service import LLMService
-from langchain_core.prompts import ChatPromptTemplate
 
 
 class RuleGenerationAgent:
-    DEFAULT_PROMPT = ChatPromptTemplate.from_template(
-        """
-        You are a world-class card game designer.
-        Create comprehensive rules for the card game based on the following game concept.
+    DEFAULT_PROMPT = """
+    You are a world-class card game designer.
+    Create comprehensive rules for the card game based on the following game concept.
 
-        Game Concept: {game_concept}
+    Game Concept: {game_concept}
 
-        Ensure the rules are clear, balanced, and suitable for the game and target audience.
-        Make sure to use '{game_concept[language]}' as the language when writing the rules.
-        """
-    )
+    Ensure the rules are clear, balanced, and suitable for the game and target audience.
+    Make sure to use '{game_concept[language]}' as the language when writing the rules.
+    """
 
     def __init__(
-        self, llm_service: LLMService, base_prompt: Optional[ChatPromptTemplate] = None
+        self, llm_service: LLMService, base_prompt: Optional[str] = None
     ):
         """
         Initialize the agent with an LLMService for generating game rules and a base prompt template.
         If no base_prompt is provided, it defaults to a built-in template.
 
         :param llm_service: Instance of LLMService for interacting with the language model.
-        :param base_prompt: Optional. ChatPromptTemplate to provide the base structure for the LLM prompt.
+        :param base_prompt: Optional. String template to provide the base structure for the LLM prompt.
         """
         self.llm_service = llm_service
         self.base_prompt = base_prompt or self.DEFAULT_PROMPT
@@ -39,14 +36,14 @@ class RuleGenerationAgent:
         :param state: The current state of the card game, including the game concept.
         :return: Updated state with the generated rules.
         """
-        game_concept: GameConcept = state["game_concept"]
+        game_concept: GameConcept = state.concept
 
         context = self._prepare_context(game_concept)
 
         rules = self._generate_rules(context)
 
         if rules:
-            state["rules"] = rules
+            state.rules = rules
 
         return state
 
@@ -68,8 +65,8 @@ class RuleGenerationAgent:
         :param context: The context containing details about the game concept.
         :return: The newly generated rules, or None if generation failed.
         """
-        return self.llm_service.call_llm(
-            structured_outputs=[Rules],
-            prompt_template=self.base_prompt,
-            context=context,
+        return self.llm_service.generate(
+            output_model=Rules,
+            prompt=self.base_prompt,
+            **context
         )
