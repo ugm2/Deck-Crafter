@@ -9,7 +9,6 @@ def should_continue(state: CardGameState) -> str:
     :param state: The current state of the card game.
     :return: The next step to take ("generate_cards" to continue generating or END to finish).
     """
-    # Get the current number of cards, handling None case
     current_cards_count = len(state.cards) if state.cards is not None else 0
 
     # Continue generating cards if not enough unique cards are generated

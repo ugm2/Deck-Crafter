@@ -6,6 +6,8 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.12",
     "gemini-api>=0.1.6",
+    "groq>=0.26.0",
+    "instructor>=1.8.3",
     "langchain>=0.3.23",
     "langchain-community>=0.3.21",
     "langchain-google-vertexai>=2.0.20",

@@ -15,16 +15,13 @@ def create_preferences_workflow(llm_service: LLMService) -> StateGraph:
     preferences_agent = PreferencesGenerationAgent(llm_service)
     
     def generate_preferences(state: CardGameState) -> CardGameState:
-        # Pasar tanto la descripción como las preferencias parciales
         game_description = None
         partial_preferences = None
         if hasattr(state, 'preferences') and state.preferences:
             game_description = getattr(state.preferences, 'game_description', None)
             partial_preferences = state.preferences
-        # Si no hay preferencias, buscar si el propio state tiene game_description
         if not game_description and hasattr(state, 'game_description'):
             game_description = state.game_description
-        # Generar preferencias completas
         generated_preferences = preferences_agent.generate_preferences(
             game_description=game_description,
             partial_preferences=partial_preferences
@@ -33,8 +30,18 @@ def create_preferences_workflow(llm_service: LLMService) -> StateGraph:
         return state
     
     workflow = StateGraph(CardGameState)
-    workflow.add_node("generate_preferences", generate_preferences)
+    
+    metadata = {
+        "model": llm_service.model_name,
+        "provider": llm_service.__class__.__name__,
+        "temperature": getattr(llm_service, "config", {}).get("temperature", getattr(getattr(llm_service, "config", {}).get("options", {}), "temperature", None)),
+        "max_tokens": getattr(llm_service, "config", {}).get("max_tokens", getattr(getattr(llm_service, "config", {}).get("options", {}), "num_predict", None)),
+        "workflow": "preferences_generation"
+    }
+    
+    workflow.add_node("generate_preferences", generate_preferences, metadata=metadata)
     workflow.set_entry_point("generate_preferences")
+
     return workflow.compile(checkpointer=MemorySaver())
 
 
@@ -46,8 +53,18 @@ def create_concept_workflow(llm_service: LLMService) -> StateGraph:
         return concept_agent.generate_concept(state)
     
     workflow = StateGraph(CardGameState)
-    workflow.add_node("generate_concept", generate_concept)
+    
+    metadata = {
+        "model": llm_service.model_name,
+        "provider": llm_service.__class__.__name__,
+        "temperature": getattr(llm_service, "config", {}).get("temperature", getattr(getattr(llm_service, "config", {}).get("options", {}), "temperature", None)),
+        "max_tokens": getattr(llm_service, "config", {}).get("max_tokens", getattr(getattr(llm_service, "config", {}).get("options", {}), "num_predict", None)),
+        "workflow": "concept_generation"
+    }
+    
+    workflow.add_node("generate_concept", generate_concept, metadata=metadata)
     workflow.set_entry_point("generate_concept")
+
     return workflow.compile(checkpointer=MemorySaver())
 
 
@@ -55,8 +72,18 @@ def create_rules_workflow(llm_service: LLMService) -> StateGraph:
     """Create a workflow specifically for rules generation."""
     rule_agent = RuleGenerationAgent(llm_service)
     workflow = StateGraph(CardGameState)
-    workflow.add_node("generate_rules", rule_agent.generate_rules)
+    
+    metadata = {
+        "model": llm_service.model_name,
+        "provider": llm_service.__class__.__name__,
+        "temperature": getattr(llm_service, "config", {}).get("temperature", getattr(getattr(llm_service, "config", {}).get("options", {}), "temperature", None)),
+        "max_tokens": getattr(llm_service, "config", {}).get("max_tokens", getattr(getattr(llm_service, "config", {}).get("options", {}), "num_predict", None)),
+        "workflow": "rules_generation"
+    }
+    
+    workflow.add_node("generate_rules", rule_agent.generate_rules, metadata=metadata)
     workflow.set_entry_point("generate_rules")
+
     return workflow.compile(checkpointer=MemorySaver())
 
 
@@ -64,10 +91,19 @@ def create_cards_workflow(llm_service: LLMService) -> StateGraph:
     """Create a workflow specifically for card generation."""
     card_agent = CardGenerationAgent(llm_service)
     workflow = StateGraph(CardGameState)
-    workflow.add_node("generate_cards", card_agent.generate_card)
+    
+    metadata = {
+        "model": llm_service.model_name,
+        "provider": llm_service.__class__.__name__,
+        "temperature": getattr(llm_service, "config", {}).get("temperature", getattr(getattr(llm_service, "config", {}).get("options", {}), "temperature", None)),
+        "max_tokens": getattr(llm_service, "config", {}).get("max_tokens", getattr(getattr(llm_service, "config", {}).get("options", {}), "num_predict", None)),
+        "workflow": "cards_generation"
+    }
+    
+    workflow.add_node("generate_cards", card_agent.generate_card, metadata=metadata)
 
-    # Add conditional logic to decide when to stop generating cards
     workflow.add_conditional_edges("generate_cards", should_continue)
 
     workflow.set_entry_point("generate_cards")
+
     return workflow.compile(checkpointer=MemorySaver()) 

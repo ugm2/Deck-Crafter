@@ -77,6 +77,15 @@ def main():
             num_predict=Config.LLM_MAX_OUTPUT_TOKENS,
             base_url=Config.OLLAMA_BASE_URL,
         )
+    elif Config.LLM_PROVIDER == "groq":
+        if not Config.GROQ_API_KEY:
+            raise ValueError("GROQ_API_KEY environment variable is required when using Groq provider")
+        llm_service = create_llm_service(
+            provider="groq",
+            model=Config.GROQ_MODEL,
+            temperature=Config.LLM_TEMPERATURE,
+            max_tokens=Config.LLM_MAX_OUTPUT_TOKENS,
+        )
     else:
         raise ValueError(f"Unsupported LLM provider: {Config.LLM_PROVIDER}")
 
@@ -181,7 +190,6 @@ def main():
     print_cards(result.get("cards"))
     print_rules(result.get("rules"))
 
-    # Save the result to a JSON file
     with open("output.json", "w") as f:
         json.dump(result, f, indent=4, default=pydantic_encoder, ensure_ascii=False)
 

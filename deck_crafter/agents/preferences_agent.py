@@ -5,12 +5,14 @@ from deck_crafter.services.llm_service import LLMService
 
 class PreferencesGenerationAgent:
     DEFAULT_PROMPT = """
-    Eres un diseñador experto de juegos de cartas.
-    Completa todas las preferencias de usuario para un juego de cartas usando la información proporcionada por el usuario.
-    Si alguna preferencia ya está especificada, respétala. Si falta alguna, complétala de forma coherente con la descripción y el resto de preferencias. Si no tienes información suficiente, haz una suposición razonable y nunca dejes un campo vacío o nulo.
+    You are an expert card game designer.
+    Complete all user preferences for a card game using the information provided by the user.
+    If any preference is already specified, respect it. If any is missing, complete it coherently with the description and other preferences.
+    If the language preference is not specified, infer the language from the game description. Write all fields in the language you infer from the game description.
+    Never leave a field empty or null.
 
-    Descripción del juego: {game_description}
-    Preferencias parciales: {partial_preferences}
+    Game description: {game_description}
+    Partial preferences: {partial_preferences}
     """
 
     def __init__(

@@ -1,12 +1,7 @@
-from enum import Enum
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import Dict, Any, Optional
+from typing import Dict
 import uuid
 from datetime import datetime, timezone
-from deck_crafter.models.card import Card
-from deck_crafter.models.game_concept import GameConcept
-from deck_crafter.models.rules import Rules
 from deck_crafter.models.user_preferences import UserPreferences
 from deck_crafter.workflow.specific_workflows import (
     create_concept_workflow,
@@ -14,13 +9,18 @@ from deck_crafter.workflow.specific_workflows import (
     create_cards_workflow,
     create_preferences_workflow
 )
-from deck_crafter.services.llm_service import OllamaService
+from deck_crafter.services.llm_service import create_llm_service
 from deck_crafter.models.state import CardGameState, GameStatus
+from deck_crafter.utils.config import Config
 
 router = APIRouter()
 
-# Initialize LLM service and workflows
-llm_service = OllamaService(model="llama3.2")
+llm_service = create_llm_service(
+    provider=Config.LLM_PROVIDER,
+    model=Config.LLM_MODEL,
+    api_key=Config.GROQ_API_KEY
+)
+
 concept_workflow = create_concept_workflow(llm_service)
 rules_workflow = create_rules_workflow(llm_service)
 cards_workflow = create_cards_workflow(llm_service)
@@ -88,11 +88,9 @@ async def generate_concept(game_id: str) -> Dict[str, str]:
     if game.status != GameStatus.CREATED:
         raise HTTPException(status_code=400, detail="Invalid game state for concept generation")
     
-    # Run only the concept generation workflow
     state = game
     result = concept_workflow.invoke(state, config={"configurable": {"thread_id": 1}})
 
-    # Update game state with generated concept
     result_state = CardGameState.model_validate(result)
     games[game_id].concept = result_state.concept
     games[game_id].status = GameStatus.CONCEPT_GENERATED
@@ -110,11 +108,9 @@ async def generate_rules(game_id: str) -> Dict[str, str]:
     if game.status != GameStatus.CONCEPT_GENERATED:
         raise HTTPException(status_code=400, detail="Invalid game state for rules generation")
     
-    # Run only the rules generation workflow
     state = game
     result = rules_workflow.invoke(state, config={"configurable": {"thread_id": 1}})
     
-    # Update game state with generated rules
     games[game_id].rules = result["rules"]
     games[game_id].status = GameStatus.RULES_GENERATED
     games[game_id].updated_at = datetime.now(timezone.utc)
@@ -131,11 +127,9 @@ async def generate_cards(game_id: str) -> Dict[str, str]:
     if game.status != GameStatus.RULES_GENERATED:
         raise HTTPException(status_code=400, detail="Invalid game state for cards generation")
     
-    # Run only the cards generation workflow
     state = game
     result = cards_workflow.invoke(state, config={"recursion_limit": 150, "configurable": {"thread_id": 1}})
     
-    # Update game state with generated cards
     games[game_id].cards = result["cards"]
     games[game_id].status = GameStatus.CARDS_GENERATED
     games[game_id].updated_at = datetime.now(timezone.utc)

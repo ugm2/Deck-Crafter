@@ -3,9 +3,12 @@ import logging
 from typing import Type
 from pydantic import BaseModel
 from ollama import Client
+from groq import Groq
+import instructor
 from ..utils.config import Config
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class LLMService(ABC):
     """Base class for LLM services."""
@@ -52,8 +55,58 @@ class OllamaService(LLMService):
         
         return output_model.model_validate_json(response.message.content)
 
+class GroqService(LLMService):
+    def __init__(self, model: str = "llama3-8b-8192", api_key: str = None, **kwargs):
+        """
+        Initialize the Groq service.
+        
+        Args:
+            model: The model to use (default: llama3-8b-8192)
+            api_key: The Groq API key. If not provided, will try to get from Config.GROQ_API_KEY
+            **kwargs: Additional configuration options
+        """
+        self.model_name = model
+        groq_client = Groq(
+            api_key=api_key or Config.GROQ_API_KEY,
+            max_retries=5,
+            timeout=60.0,
+        )
+        self.client = instructor.from_groq(
+            groq_client,
+            mode=instructor.Mode.JSON
+        )
+        self.config = {
+            'temperature': Config.LLM_TEMPERATURE,
+            'max_tokens': Config.LLM_MAX_OUTPUT_TOKENS,
+            'top_p': 0.8,
+            **kwargs
+        }
+    
+    def generate(
+        self,
+        output_model: Type[BaseModel],
+        prompt: str,
+        **context
+    ) -> BaseModel:
+        formatted_prompt = prompt.format(**context)
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                response_model=output_model,
+                messages=[{'role': 'user', 'content': formatted_prompt}],
+                **self.config
+            )
+            return response
+        except Exception as e:
+            logger.error(f"Error in Groq API call: {str(e)}")
+            raise
+
 class LLMProviderRegistry:
-    _providers = {'ollama': OllamaService}
+    _providers = {
+        'ollama': OllamaService,
+        'groq': GroqService
+    }
     
     @classmethod
     def register_provider(cls, name: str, provider: Type[LLMService]):

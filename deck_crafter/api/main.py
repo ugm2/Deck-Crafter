@@ -8,16 +8,15 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configurar CORS para desarrollo local
+# Configure CORS for local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, especificar los orígenes permitidos
+    allow_origins=["*"],  # In production, specify allowed origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Incluir las rutas
 app.include_router(game.router, prefix="/api/v1/games", tags=["games"])
 
 @app.get("/")
