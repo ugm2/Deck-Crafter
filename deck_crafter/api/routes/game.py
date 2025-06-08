@@ -7,7 +7,8 @@ from deck_crafter.workflow.specific_workflows import (
     create_concept_workflow,
     create_rules_workflow,
     create_cards_workflow,
-    create_preferences_workflow
+    create_preferences_workflow,
+    create_concept_and_rules_workflow
 )
 from deck_crafter.services.llm_service import create_llm_service
 from deck_crafter.models.state import CardGameState, GameStatus
@@ -21,9 +22,11 @@ llm_service = create_llm_service(
     api_key=Config.GROQ_API_KEY
 )
 
+preferences_workflow = create_preferences_workflow(llm_service)
 concept_workflow = create_concept_workflow(llm_service)
 rules_workflow = create_rules_workflow(llm_service)
 cards_workflow = create_cards_workflow(llm_service)
+concept_and_rules_workflow = create_concept_and_rules_workflow(llm_service)
 
 # Game state storage (in-memory for now)
 games: Dict[str, CardGameState] = {}
@@ -43,7 +46,6 @@ async def start_game(preferences: UserPreferences) -> Dict[str, str]:
         preferences.rule_complexity
     ])
     if needs_generation:
-        preferences_workflow = create_preferences_workflow(llm_service)
         initial_state = CardGameState(
             game_id=game_id,
             status=GameStatus.CREATED,
@@ -134,4 +136,25 @@ async def generate_cards(game_id: str) -> Dict[str, str]:
     games[game_id].status = GameStatus.CARDS_GENERATED
     games[game_id].updated_at = datetime.now(timezone.utc)
     
-    return {"status": "cards_generated"} 
+    return {"status": "cards_generated"}
+
+@router.post("/{game_id}/concept-and-rules")
+async def generate_concept_and_rules(game_id: str) -> Dict[str, str]:
+    """Generate both the game concept and rules in one operation."""
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    game = games[game_id]
+    if game.status != GameStatus.CREATED:
+        raise HTTPException(status_code=400, detail="Invalid game state for concept and rules generation")
+    
+    state = game
+    result = concept_and_rules_workflow.invoke(state, config={"configurable": {"thread_id": 1}})
+    
+    result_state = CardGameState.model_validate(result)
+    games[game_id].concept = result_state.concept
+    games[game_id].rules = result_state.rules
+    games[game_id].status = GameStatus.RULES_GENERATED
+    games[game_id].updated_at = datetime.now(timezone.utc)
+    
+    return {"status": GameStatus.RULES_GENERATED} 

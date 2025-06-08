@@ -5,7 +5,6 @@ from deck_crafter.agents.card_agent import CardGenerationAgent
 from deck_crafter.models.state import CardGameState
 from deck_crafter.services.llm_service import LLMService
 from langgraph.checkpoint.memory import MemorySaver
-from typing import Dict, Any
 from deck_crafter.agents.preferences_agent import PreferencesGenerationAgent
 from deck_crafter.workflow.conditions import should_continue
 
@@ -106,4 +105,28 @@ def create_cards_workflow(llm_service: LLMService) -> StateGraph:
 
     workflow.set_entry_point("generate_cards")
 
+    return workflow.compile(checkpointer=MemorySaver())
+
+
+def create_concept_and_rules_workflow(llm_service: LLMService) -> StateGraph:
+    """Create a workflow that combines concept and rules generation in sequence."""
+    concept_agent = ConceptGenerationAgent(llm_service)
+    rule_agent = RuleGenerationAgent(llm_service)
+    
+    workflow = StateGraph(CardGameState)
+    
+    metadata = {
+        "model": llm_service.model_name,
+        "provider": llm_service.__class__.__name__,
+        "temperature": getattr(llm_service, "config", {}).get("temperature", getattr(getattr(llm_service, "config", {}).get("options", {}), "temperature", None)),
+        "max_tokens": getattr(llm_service, "config", {}).get("max_tokens", getattr(getattr(llm_service, "config", {}).get("options", {}), "num_predict", None)),
+        "workflow": "concept_and_rules_generation"
+    }
+    
+    workflow.add_node("generate_concept", concept_agent.generate_concept, metadata=metadata)
+    workflow.add_node("generate_rules", rule_agent.generate_rules, metadata=metadata)
+    
+    workflow.add_edge("generate_concept", "generate_rules")
+    workflow.set_entry_point("generate_concept")
+    
     return workflow.compile(checkpointer=MemorySaver()) 

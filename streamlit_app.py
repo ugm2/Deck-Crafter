@@ -91,24 +91,22 @@ if start_game:
             "rule_complexity": st.session_state.get("rule_complexity") or None
         }
         
-        with st.spinner("Iniciando juego..."):
+        with st.spinner("Iniciando juego y generando concepto y reglas..."):
             result = call_api("start", data=data)
             if result and "game_id" in result:
                 st.session_state.game_id = result["game_id"]
-                st.session_state.current_step = "concept"
                 game_state = call_api(f"{st.session_state.game_id}", method="GET")
                 if game_state and "preferences" in game_state:
                     st.session_state["_pending_preferences"] = game_state["preferences"]
+                
+                concept_rules_result = call_api(f"{st.session_state.game_id}/concept-and-rules")
+                if concept_rules_result and concept_rules_result.get("status") == "rules_generated":
+                    st.session_state.current_step = "cards"
+                    st.success("¡Juego iniciado! Ahora puedes generar las cartas.")
                     st.rerun()
-                st.success("¡Juego iniciado! Ahora puedes generar el concepto.")
             else:
                 st.session_state.game_id = None
                 st.session_state.current_step = 'start'
-
-if st.session_state.get("_just_updated_preferences"):
-    st.session_state.current_step = "concept"
-    st.success("¡Juego iniciado! Ahora puedes generar el concepto.")
-    del st.session_state["_just_updated_preferences"]
 
 if st.session_state.game_id:
     st.header("Estado del Juego")
@@ -117,25 +115,7 @@ if st.session_state.game_id:
     if game_state:
         st.json(game_state)
     
-    if st.session_state.current_step == "concept":
-        if st.button("Generar Concepto"):
-            with st.spinner("Generando concepto..."):
-                result = call_api(f"{st.session_state.game_id}/concept")
-                if result and result.get("status") == "concept_generated":
-                    st.session_state.current_step = "rules"
-                    st.success("¡Concepto generado! Ahora puedes generar las reglas.")
-                    st.rerun()
-    
-    elif st.session_state.current_step == "rules":
-        if st.button("Generar Reglas"):
-            with st.spinner("Generando reglas..."):
-                result = call_api(f"{st.session_state.game_id}/rules")
-                if result and result.get("status") == "rules_generated":
-                    st.session_state.current_step = "cards"
-                    st.success("¡Reglas generadas! Ahora puedes generar las cartas.")
-                    st.rerun()
-    
-    elif st.session_state.current_step == "cards":
+    if st.session_state.current_step == "cards":
         if st.button("Generar Cartas"):
             with st.spinner("Generando cartas..."):
                 result = call_api(f"{st.session_state.game_id}/cards")
