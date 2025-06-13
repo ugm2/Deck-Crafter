@@ -14,7 +14,7 @@ class UserPreferences(BaseModel):
 class RequiredUserPreferences(BaseModel):
     language: str = Field(
         ...,
-        pattern=r"^[A-Z][a-z]+$",
+        pattern=r"^[\p{Lu}][\p{Ll}]+$",
         description="The language in which the game rules and content will be written (e.g., 'English', 'Español', 'Français')."
     )
     theme: str = Field(
