@@ -1,13 +1,14 @@
 import aiosqlite
 import json
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Optional, Dict
 from pathlib import Path
 from deck_crafter.models.card import Card
 from deck_crafter.models.game_concept import GameConcept
 from deck_crafter.models.rules import Rules
 from deck_crafter.models.state import CardGameState, GameStatus
 from deck_crafter.models.user_preferences import UserPreferences
+import sqlite3
 
 DB_PATH = Path("deck_crafter.db")
 
@@ -24,6 +25,17 @@ async def init_db():
                 cards TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
+            )
+        """)
+        
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS card_images (
+                game_id TEXT NOT NULL,
+                card_name TEXT NOT NULL,
+                image_data BLOB NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (game_id, card_name),
+                FOREIGN KEY (game_id) REFERENCES games(game_id)
             )
         """)
         await db.commit()
@@ -70,4 +82,51 @@ async def get_game_state(game_id: str) -> Optional[CardGameState]:
         cards=[Card.model_validate(card) for card in cards_data] if cards_data else None,
         created_at=datetime.fromisoformat(row[6]),
         updated_at=datetime.fromisoformat(row[7])
-    ) 
+    )
+
+async def save_card_image(game_id: str, card_name: str, image_data: bytes):
+    """Save a card image to the database."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT OR REPLACE INTO card_images 
+            (game_id, card_name, image_data, created_at)
+            VALUES (?, ?, ?, ?)
+        """, (
+            game_id,
+            card_name,
+            image_data,
+            datetime.now().isoformat()
+        ))
+        await db.commit()
+
+async def get_card_image(game_id: str, card_name: str) -> Optional[bytes]:
+    """Retrieve a card image from the database."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT image_data FROM card_images WHERE game_id = ? AND card_name = ?",
+            (game_id, card_name)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+async def get_all_card_images(game_id: str) -> Dict[str, bytes]:
+    """Retrieve all card images for a game from the database."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT card_name, image_data FROM card_images WHERE game_id = ?",
+            (game_id,)
+        )
+        rows = await cursor.fetchall()
+        return {row[0]: row[1] for row in rows}
+
+def save_card_image_sync(game_id: str, card_name: str, image_data: bytes) -> None:
+    """Save a card image to the database synchronously."""
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        conn.execute(
+            "INSERT OR REPLACE INTO card_images (game_id, card_name, image_data, created_at) VALUES (?, ?, ?, ?)",
+            (game_id, card_name, image_data, datetime.now(timezone.utc))
+        )
+        conn.commit()
+    finally:
+        conn.close() 

@@ -113,6 +113,7 @@ class CardGenerationAgent:
             quantity=quantity_per_card,
             type=card_type.name,
             description="",
+            image_description=""
         )
 
     def _calculate_quantity_per_card(

@@ -1,19 +1,21 @@
-from fastapi import APIRouter, HTTPException
-from typing import Dict
+from fastapi import APIRouter, HTTPException, Depends
+from typing import Dict, Any
 import uuid
 from datetime import datetime, timezone
+import base64
 from deck_crafter.models.user_preferences import UserPreferences
 from deck_crafter.workflow.specific_workflows import (
     create_concept_workflow,
     create_rules_workflow,
     create_cards_workflow,
     create_preferences_workflow,
-    create_concept_and_rules_workflow
+    create_concept_and_rules_workflow,
+    create_image_generation_workflow
 )
 from deck_crafter.services.llm_service import create_llm_service
 from deck_crafter.models.state import CardGameState, GameStatus
 from deck_crafter.utils.config import Config
-from deck_crafter.database import init_db, save_game_state as save_game_state_to_db, get_game_state as get_game_state_from_db
+from deck_crafter.database import init_db, save_game_state as save_game_state_to_db, get_game_state as get_game_state_from_db, get_all_card_images
 
 router = APIRouter()
 
@@ -33,6 +35,7 @@ concept_workflow = create_concept_workflow(llm_service)
 rules_workflow = create_rules_workflow(llm_service)
 cards_workflow = create_cards_workflow(llm_service)
 concept_and_rules_workflow = create_concept_and_rules_workflow(llm_service)
+image_workflow = create_image_generation_workflow(llm_service)
 
 @router.post("/start")
 async def start_game(preferences: UserPreferences) -> Dict[str, str]:
@@ -82,6 +85,19 @@ async def get_game_state(game_id: str) -> CardGameState:
     state = await get_game_state_from_db(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
+    
+    # If we have cards and they have images, include the image data
+    if state.cards:
+        images = await get_all_card_images(game_id)
+        updated_cards = []
+        for card in state.cards:
+            if card.name in images:
+                image_base64 = base64.b64encode(images[card.name]).decode('utf-8')
+                updated_cards.append(card.model_copy(update={'image_data': image_base64}))
+            else:
+                updated_cards.append(card)
+        state.cards = updated_cards
+    
     return state
 
 @router.post("/{game_id}/concept")
@@ -161,4 +177,26 @@ async def generate_concept_and_rules(game_id: str) -> Dict[str, str]:
     state.updated_at = datetime.now(timezone.utc)
     await save_game_state_to_db(state)
     
-    return {"status": GameStatus.RULES_GENERATED} 
+    return {"status": GameStatus.RULES_GENERATED}
+
+@router.post("/{game_id}/images")
+async def generate_images(game_id: str) -> Dict[str, Any]:
+    """Generate images for all cards in the game."""
+    state = await get_game_state_from_db(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    if state.status != GameStatus.CARDS_GENERATED:
+        raise HTTPException(
+            status_code=400,
+            detail="Cards must be generated before generating images"
+        )
+    
+    result = image_workflow.invoke(state, config={"configurable": {"thread_id": 1}})
+    
+    state.status = GameStatus.IMAGES_GENERATED
+    state.updated_at = datetime.now(timezone.utc)
+    
+    await save_game_state_to_db(state)
+    
+    return {"status": state.status} 

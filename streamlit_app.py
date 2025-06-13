@@ -35,9 +35,15 @@ def _generate_card_html(card: Dict[str, Any], rarity_class: str) -> str:
     list_items_html += _build_card_detail_li("Color", card.get("color")) + "\n"
     list_items_html += _build_card_detail_li("Descripción de Imagen", card.get("image_description")) + "\n"
 
+    # Add image if available
+    image_html = ""
+    if card.get("image_data"):
+        image_html = f'<div class="card-image"><img src="data:image/png;base64,{card["image_data"]}" alt="{name}" style="width: 100%; max-height: 200px; object-fit: contain;"></div>\n'
+
     # Construct the full card HTML string using minimal f-string for the main structure
     card_html = (
         '<div class="card">\n'
+        f'{image_html}'  # Add image at the top
         '    <div class="card-title">\n'
         f'        {name} \n'
         f'        <span class="{rarity_class}">({rarity})</span>\n'
@@ -128,6 +134,7 @@ st.markdown("""
     .rarity-common { color: #555555; font-weight: bold; }
     .rarity-uncommon { color: #2C7DA0; font-weight: bold; }
     .rarity-rare { color: #DAA520; font-weight: bold; }
+    .rarity-raro { color: #DAA520; font-weight: bold; }
     .rarity-legendario { color: #8B0000; font-weight: bold; }
     .rarity-mythic { color: #8A2BE2; font-weight: bold; }
     .concept-main {
@@ -146,16 +153,31 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
         border: 1px solid #E0E0E0;
     }
+    .card-image {
+        margin-bottom: 1rem;
+        text-align: center;
+        background-color: #FFFFFF;
+        padding: 0.5rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
     </style>
 """, unsafe_allow_html=True)
-
-st.markdown('<div class="game-title">🎮 Deck Crafter</div>', unsafe_allow_html=True)
-st.markdown("Crea tu propio juego de cartas con IA")
 
 if 'game_id' not in st.session_state:
     st.session_state.game_id = None
 if 'current_step' not in st.session_state:
     st.session_state.current_step = 'start'
+
+st.markdown('<div class="game-title">🎮 Deck Crafter</div>', unsafe_allow_html=True)
+st.markdown("Crea tu propio juego de cartas con IA")
+
+with st.expander("Cargar un Juego Existente"):
+    game_id_input = st.text_input(
+        "Introduce el ID de un juego para cargarlo",
+        placeholder="Pega el ID del juego aquí"
+    )
+    load_game = st.button("Cargar Juego")
 
 game_description = st.text_area(
     "Describe tu juego de cartas",
@@ -240,6 +262,11 @@ if start_game:
             else:
                 st.session_state.game_id = None
                 st.session_state.current_step = 'start'
+
+if load_game:
+    if not game_id_input:
+        st.error("No has proporcionado ningún ID válido")
+    st.session_state.game_id = game_id_input
 
 if st.session_state.game_id:
     game_state = call_api(f"{st.session_state.game_id}", method="GET")
@@ -346,7 +373,9 @@ if st.session_state.game_id:
                     col_idx = 0
                     for card in cards:
                         with cols[col_idx]:
-                            rarity_class = f"rarity-{card.get('rarity', 'Común').lower().replace(' ', '')}"
+                            rarity = card.get('rarity', 'Común')
+                            rarity = rarity if rarity else "Común"
+                            rarity_class = f"rarity-{rarity.lower().replace(' ', '')}"
                             
                             # Generate card HTML using the helper function
                             card_display_html = _generate_card_html(card, rarity_class)
@@ -358,6 +387,15 @@ if st.session_state.game_id:
             with st.spinner("Generando cartas..."):
                 result = call_api(f"{st.session_state.game_id}/cards")
                 if result and result.get("status") == "cards_generated":
-                    st.session_state.current_step = "complete"
-                    st.success("¡Juego completado! Puedes ver el resultado completo arriba.")
+                    st.session_state.current_step = "images"
+                    st.success("¡Cartas generadas! Ahora puedes generar las imágenes.")
                     st.rerun()
+
+if st.session_state.current_step == "images":
+    if st.button("Generar Imágenes"):
+        with st.spinner("Generando imágenes..."):
+            result = call_api(f"{st.session_state.game_id}/images")
+            if result and result.get("status") == "images_generated":
+                st.session_state.current_step = "complete"
+                st.success("¡Juego completado! Puedes ver el resultado completo arriba.")
+                st.rerun()

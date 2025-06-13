@@ -76,10 +76,17 @@ class Card(BaseModel):
             "Examples: 'Red', 'Blue', 'Hearts', 'Spades'."
         ),
     )
-    image_description: Optional[str] = Field(
+    image_description: str = Field(
+        ...,
+        description=(
+            "A description of the card's artwork or illustration in English only. "
+            "Examples: 'A fierce dragon breathing fire', 'A knight in armor wielding a sword'."
+        ),
+    )
+    image_data: Optional[str] = Field(
         None,
         description=(
-            "A description of the card's artwork or illustration in English only (**optional**). "
-            "Examples: 'A fierce dragon breathing fire', 'A knight in armor wielding a sword'."
+            "Base64 encoded image data for the card (**optional**). "
+            "Used to store the card's visual representation."
         ),
     )

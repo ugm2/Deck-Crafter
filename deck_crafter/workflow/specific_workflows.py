@@ -2,6 +2,7 @@ from langgraph.graph import StateGraph, END
 from deck_crafter.agents.concept_agent import ConceptGenerationAgent
 from deck_crafter.agents.rules_agent import RuleGenerationAgent
 from deck_crafter.agents.card_agent import CardGenerationAgent
+from deck_crafter.agents.image_agent import ImageGenerationAgent
 from deck_crafter.models.state import CardGameState
 from deck_crafter.services.llm_service import LLMService
 from langgraph.checkpoint.memory import MemorySaver
@@ -129,4 +130,23 @@ def create_concept_and_rules_workflow(llm_service: LLMService) -> StateGraph:
     workflow.add_edge("generate_concept", "generate_rules")
     workflow.set_entry_point("generate_concept")
     
-    return workflow.compile(checkpointer=MemorySaver()) 
+    return workflow.compile(checkpointer=MemorySaver())
+
+
+def create_image_generation_workflow(llm_service: LLMService) -> StateGraph:
+    """Create a workflow specifically for image generation."""
+    image_agent = ImageGenerationAgent(llm_service)
+    workflow = StateGraph(CardGameState)
+    
+    metadata = {
+        "model": llm_service.model_name,
+        "provider": llm_service.__class__.__name__,
+        "temperature": getattr(llm_service, "config", {}).get("temperature", getattr(getattr(llm_service, "config", {}).get("options", {}), "temperature", None)),
+        "max_tokens": getattr(llm_service, "config", {}).get("max_tokens", getattr(getattr(llm_service, "config", {}).get("options", {}), "num_predict", None)),
+        "workflow": "image_generation"
+    }
+    
+    workflow.add_node("generate_images", image_agent.generate_images, metadata=metadata)
+    workflow.set_entry_point("generate_images")
+
+    return workflow.compile(checkpointer=MemorySaver())

@@ -12,6 +12,7 @@ class GameStatus(str, Enum):
     CONCEPT_GENERATED = "concept_generated"
     RULES_GENERATED = "rules_generated"
     CARDS_GENERATED = "cards_generated"
+    IMAGES_GENERATED = "images_generated"
 
 class CardGameState(BaseModel):
     game_id: str
@@ -20,5 +21,6 @@ class CardGameState(BaseModel):
     concept: Optional[GameConcept] = None
     rules: Optional[Rules] = None
     cards: Optional[list[Card]] = None
+    image_paths: Optional[dict[str, str]] = None
     created_at: datetime
     updated_at: datetime
