@@ -1,91 +1,72 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
+
+class TurnPhase(BaseModel):
+    """
+    Represents a single, distinct phase within a player's turn.
+    """
+    phase_name: str = Field(..., description="The name of the phase, e.g., 'Draw Phase', 'Main Phase', 'End Phase'.")
+    phase_description: str = Field(..., description="A clear description of what actions can be taken during this phase.")
 
 
 class Rules(BaseModel):
     """
-    A model representing the structure of the rules for a card-only game, without a board.
-    The model defines required fields for setup, turn structure, and win conditions,
-    with optional fields for additional rules, reaction phases, and more advanced mechanics.
+    A model representing the highly structured rules for a card-only game.
+    The model's structure guides the AI to produce clear, unambiguous, and well-organized content.
     """
 
-    initial_hands: str = Field(
-        ...,
-        description=(
-            "Instructions on how many cards each player is dealt initially. "
-            "Examples: 'Each player is dealt 5 cards from the main deck', "
-            "'Players draw 3 ability cards and 2 weapon cards to start'."
-        ),
-    )
     deck_preparation: str = Field(
         ...,
-        description=(
-            "Instructions on how to prepare the main deck or any other card piles before starting. "
-            "Examples: 'Shuffle the main deck and place it in the center', "
-            "'Separate the action and character cards into two decks'."
-        ),
+        description="Step-by-step instructions on how to prepare the main deck and any other card piles before starting the game."
     )
-    turn_structure: str = Field(
+    initial_hands: str = Field(
         ...,
-        description=(
-            "The order and structure of each player's turn (required). "
-            "Examples: 'On your turn, draw 1 card and play 1 action card. You can attack an opponent or perform a special action', "
-            "'Players take turns drawing 2 cards from the deck and playing as many cards as they like from their hand'."
-        ),
+        description="Instructions on how many cards each player is dealt initially and any rules for mulligans or redrawing."
+    )
+
+    turn_structure: List[TurnPhase] = Field(
+        ...,
+        description="A list of the sequential phases that make up a single player's turn. This must be a step-by-step breakdown."
+    )
+
+    win_conditions: str = Field(
+        ...,
+        description="The clear and unequivocal conditions that a player must meet to win the game."
+    )
+    
+    resource_mechanics: Optional[str] = Field(
+        None,
+        description="Describes how players accumulate and use resources or currency (e.g., Mana, Energy, Gold) if they exist in the game."
     )
     reaction_phase: Optional[str] = Field(
         None,
-        description=(
-            "Describes any opportunities players have to react or respond during opponents' turns. "
-            "Examples: 'Players may counter an attack by discarding a defense card', "
-            "'You may play a trap card in response to an opponent’s attack'."
-        ),
+        description="Describes if and how players can react or respond during opponents' turns (e.g., playing counter-spells, traps)."
     )
-    win_conditions: str = Field(
-        ...,
-        description=(
-            "The conditions required to win the game (required). "
-            "Examples: 'The first player to collect 10 treasure cards wins', "
-            "'The last player standing wins after eliminating all opponents', "
-            "'The player with the most points at the end of 10 rounds wins'."
-        ),
+
+    glossary: Optional[Dict[str, str]] = Field(
+        None,
+        description="A dictionary of game-specific keywords and their precise definitions. Key: Term, Value: Definition. Essential for clarity."
     )
+
+    examples_of_play: Optional[List[str]] = Field(
+        None,
+        description="A list of concrete examples illustrating complex interactions or a typical sequence of play to resolve ambiguity."
+    )
+
     additional_rules: Optional[List[str]] = Field(
         None,
-        description=(
-            "Any additional rules or mechanics that modify the core gameplay. "
-            "This can include advanced rules, sudden death conditions, tiebreakers, or game-altering effects. "
-            "Examples: ['Players can discard 2 cards to gain 1 extra action', "
-            "'In the event of a tie, the player with the most resource cards wins']."
-        ),
+        description="Any other miscellaneous rules that do not fit into the other categories, such as tie-breakers, hand size limits, etc."
     )
+    
     end_of_round: Optional[str] = Field(
         None,
-        description=(
-            "What happens at the end of a round, if the game has distinct rounds. "
-            "Examples: 'All players discard down to 3 cards', 'Each player may draw 2 cards and reset their health'."
-        ),
+        description="Describes what happens at the end of a full round of turns, if applicable."
     )
     turn_limit: Optional[int] = Field(
         None,
-        description=(
-            "The maximum number of turns or rounds in the game before it ends. "
-            "Examples: 'The game lasts 10 rounds', 'After each player takes 5 turns, the game ends'."
-        ),
+        description="The maximum number of turns or rounds before the game ends, if any."
     )
     scoring_system: Optional[str] = Field(
         None,
-        description=(
-            "How points are earned or calculated in the game, if applicable. "
-            "Examples: 'Players earn 1 point for each treasure collected', "
-            "'Each monster defeated gives 2 points', 'Players lose 1 point for every defense card discarded'."
-        ),
-    )
-    resource_mechanics: Optional[str] = Field(
-        None,
-        description=(
-            "Describes how players accumulate and use resources or currency. "
-            "Examples: 'Players earn gold by defeating monsters and can spend it to buy new cards', "
-            "'Each resource card allows the player to perform an additional action'."
-        ),
+        description="Describes how points are calculated, if the game is not won by a binary condition."
     )

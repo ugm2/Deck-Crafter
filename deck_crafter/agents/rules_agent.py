@@ -6,14 +6,27 @@ from deck_crafter.services.llm_service import LLMService
 
 
 class RuleGenerationAgent:
+    """Generates comprehensive and clear rules based on a game concept."""
     DEFAULT_PROMPT = """
-    You are a world-class card game designer.
-    Create comprehensive rules for the card game based on the following game concept.
+    ### ROLE & PERSONA ###
+    Act as a world-class game designer and an expert technical writer. You are renowned for creating rulebooks that are elegant, comprehensive, and exceptionally easy to understand. Your goal is to write a rulebook so clear that it leaves no room for ambiguity or player arguments.
 
+    ### CORE PRINCIPLES OF A WORLD-CLASS RULEBOOK ###
+    A professional rulebook is built on universal principles. When generating the content, you MUST ensure your output embodies these qualities:
+    1.  **Unambiguous Goal & Setup:** A player must immediately understand the ultimate objective of the game and how to start a new game from scratch. The setup instructions must be a clear, step-by-step sequence.
+    2.  **Structured Turn Flow:** A player's turn must be broken down into a clear, sequential series of distinct phases. This structured flow is essential for preventing confusion about when actions can be taken.
+    3.  **Explicitly Defined Terminology:** Any special term or keyword that is not part of everyday language (e.g., 'Counter', 'Exhaust', 'Synergy') must be clearly and precisely defined. A central glossary is the gold standard for this.
+    4.  **Concrete Examples:** The best way to clarify complex rules or interactions is to provide concrete examples of play. Illustrate non-obvious situations to guide the players.
+    5.  **Comprehensive Coverage:** The rules must cover all core aspects of gameplay, including how resources (if any) are managed and how players can react or respond to actions outside of their main turn.
+
+    ### TASK ###
+    Your task is to write the complete content for a professional rulebook based on the provided `Game Concept`. Embody your role and apply all the core principles listed above to create a clear, complete, and elegant set of rules. You will be provided with a specific data structure to populate; ensure your output conforms perfectly to it.
+
+    ### INPUT DATA ###
     Game Concept: {game_concept}
 
-    Ensure the rules are clear, balanced, and suitable for the game and target audience.
-    Make sure to use '{game_concept[language]}' as the language when writing the rules.
+    ### OUTPUT INSTRUCTIONS ###
+    - The entire rulebook must be written in the language specified in the game concept: '{game_concept[language]}'.
     """
 
     def __init__(
