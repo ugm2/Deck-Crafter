@@ -314,40 +314,69 @@ if st.session_state.game_id:
             rules = game_state["rules"]
             st.markdown('<div class="section-title">📖 Reglas del Juego</div>', unsafe_allow_html=True)
             
-            tabs = st.tabs(["Configuración", "Jugabilidad", "Condiciones de Victoria", "Reglas Adicionales", "Otros Detalles"])
+            tabs = st.tabs(["Configuración", "Jugabilidad", "Glosario", "Ejemplos de Juego", "Otras Reglas"])
             
-            with tabs[0]: # Setup
-                st.markdown('<div class="content-container">', unsafe_allow_html=True) # Use content-container
-                st.markdown(f"<p><b>Preparación del Mazo:</b> {clean_and_unescape_text(rules.get('deck_preparation', 'No especificado'))}</p>", unsafe_allow_html=True)
-                st.markdown(f"<p><b>Manos Iniciales:</b> {clean_and_unescape_text(rules.get('initial_hands', 'No especificado'))}</p>", unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            with tabs[1]: # Gameplay
-                st.markdown('<div class="content-container">', unsafe_allow_html=True) # Use content-container
-                st.markdown(f"<p><b>Estructura del Turno:</b> {clean_and_unescape_text(rules.get('turn_structure', 'No especificado'))}</p>", unsafe_allow_html=True)
-                st.markdown(f"<p><b>Fase de Reacción:</b> {clean_and_unescape_text(rules.get('reaction_phase', 'No especificado'))}</p>", unsafe_allow_html=True)
-                st.markdown(f"<p><b>Fin de Ronda:</b> {clean_and_unescape_text(rules.get('end_of_round', 'No especificado'))}</p>", unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            with tabs[2]: # Winning Conditions
-                st.markdown('<div class="content-container">', unsafe_allow_html=True) # Use content-container
+            # Pestaña 0: Configuración (Setup)
+            with tabs[0]:
+                st.markdown('<div class="content-container">', unsafe_allow_html=True)
+                st.subheader("Preparación de la Partida")
+                st.markdown(f"<p><b>Mazo:</b> {clean_and_unescape_text(rules.get('deck_preparation', 'No especificado'))}</p>", unsafe_allow_html=True)
+                st.markdown(f"<p><b>Mano Inicial:</b> {clean_and_unescape_text(rules.get('initial_hands', 'No especificado'))}</p>", unsafe_allow_html=True)
+                st.subheader("Condiciones de Victoria")
                 st.markdown(f"<p>{clean_and_unescape_text(rules.get('win_conditions', 'No especificado'))}</p>", unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
             
-            with tabs[3]: # Additional Rules
-                st.markdown('<div class="content-container">', unsafe_allow_html=True) # Use content-container
-                if rules.get("additional_rules"):
-                    for rule in rules["additional_rules"]:
-                        st.markdown(f"<p>* {clean_and_unescape_text(rule)}</p>", unsafe_allow_html=True)
+            # Pestaña 1: Jugabilidad (Gameplay)
+            with tabs[1]:
+                st.markdown('<div class="content-container">', unsafe_allow_html=True)
+                st.subheader("Estructura del Turno")
+                # --- NUEVA LÓGICA PARA MOSTRAR LAS FASES DEL TURNO ---
+                if rules.get("turn_structure"):
+                    for phase in rules["turn_structure"]:
+                        st.markdown(f"<h6>{clean_and_unescape_text(phase.get('phase_name', 'Fase sin nombre'))}</h6>", unsafe_allow_html=True)
+                        st.markdown(f"<p>{clean_and_unescape_text(phase.get('phase_description', ''))}</p>", unsafe_allow_html=True)
                 else:
-                    st.markdown("<p>No se especificaron reglas adicionales.</p>", unsafe_allow_html=True)
+                    st.markdown("<p>No se especificó una estructura de turno detallada.</p>", unsafe_allow_html=True)
+                
+                st.subheader("Mecánicas Adicionales")
+                st.markdown(f"<p><b>Fase de Reacción:</b> {clean_and_unescape_text(rules.get('reaction_phase', 'No especificada'))}</p>", unsafe_allow_html=True)
+                st.markdown(f"<p><b>Fin de Ronda:</b> {clean_and_unescape_text(rules.get('end_of_round', 'No especificado'))}</p>", unsafe_allow_html=True)
+                st.markdown(f"<p><b>Mecánicas de Recursos:</b> {clean_and_unescape_text(rules.get('resource_mechanics', 'No especificadas'))}</p>", unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
-            
-            with tabs[4]: # Other Details
-                st.markdown('<div class="content-container">', unsafe_allow_html=True) # Use content-container
+
+            # --- NUEVA PESTAÑA PARA EL GLOSARIO ---
+            with tabs[2]:
+                st.markdown('<div class="content-container">', unsafe_allow_html=True)
+                st.subheader("Glosario de Términos")
+                if rules.get("glossary"):
+                    for term, definition in rules["glossary"].items():
+                        st.markdown(f"<b>{clean_and_unescape_text(term)}:</b> {clean_and_unescape_text(definition)}", unsafe_allow_html=True)
+                else:
+                    st.markdown("<p>No hay un glosario disponible.</p>", unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            # --- NUEVA PESTAÑA PARA EJEMPLOS ---
+            with tabs[3]:
+                st.markdown('<div class="content-container">', unsafe_allow_html=True)
+                st.subheader("Ejemplos de Juego")
+                if rules.get("examples_of_play"):
+                    for i, example in enumerate(rules["examples_of_play"]):
+                        st.markdown(f"<b>Ejemplo {i+1}:</b>", unsafe_allow_html=True)
+                        st.markdown(f"<p><i>{clean_and_unescape_text(example)}</i></p>", unsafe_allow_html=True)
+                else:
+                    st.markdown("<p>No se proporcionaron ejemplos.</p>", unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            # Pestaña 4: Otras Reglas
+            with tabs[4]:
+                st.markdown('<div class="content-container">', unsafe_allow_html=True)
+                st.subheader("Detalles y Reglas Adicionales")
                 st.markdown(f"<p><b>Límite de Turnos:</b> {clean_and_unescape_text(rules.get('turn_limit', 'No especificado'))}</p>", unsafe_allow_html=True)
                 st.markdown(f"<p><b>Sistema de Puntuación:</b> {clean_and_unescape_text(rules.get('scoring_system', 'No especificado'))}</p>", unsafe_allow_html=True)
-                st.markdown(f"<p><b>Mecánicas de Recursos:</b> {clean_and_unescape_text(rules.get('resource_mechanics', 'No especificado'))}</p>", unsafe_allow_html=True)
+                if rules.get("additional_rules"):
+                    st.markdown("<b>Reglas Misceláneas:</b>", unsafe_allow_html=True)
+                    for rule in rules["additional_rules"]:
+                        st.markdown(f"<p>* {clean_and_unescape_text(rule)}</p>", unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
         # Cards Section
@@ -381,6 +410,46 @@ if st.session_state.game_id:
                             card_display_html = _generate_card_html(card, rarity_class)
                             st.markdown(card_display_html, unsafe_allow_html=True)
                         col_idx = (col_idx + 1) % 5
+
+        # Evaluation Section
+        if game_state.get("evaluation"):
+            st.markdown('<div class="section-title">🏆 Evaluación del Juego</div>', unsafe_allow_html=True)
+            evaluation = game_state["evaluation"]
+
+            st.subheader("Resumen General (Puntuación: {overall_score}/10)".format(overall_score=evaluation.get('overall_score', 'N/A')))
+            st.info(evaluation.get('summary', 'No hay resumen disponible.'))
+
+            with st.expander("Ver Análisis Detallado"):
+                # Mapeo de las claves del modelo a títulos amigables para la interfaz
+                metric_map = {
+                    "balance": "Balance",
+                    "coherence": "Coherencia",
+                    "clarity": "Claridad",
+                    "originality": "Originalidad",
+                    "playability": "Jugabilidad",
+                    "fidelity": "Fidelidad a la Petición"
+                }
+
+                for key, title in metric_map.items():
+                    # Asegurarse de que la clave exista antes de intentar acceder
+                    if key in evaluation:
+                        metric_data = evaluation[key]
+                        st.subheader(f"{title} (Puntuación: {metric_data.get('score', 'N/A')}/10)")
+                        st.markdown(f"**Análisis:** {metric_data.get('analysis', 'No hay análisis disponible.')}")
+                        if metric_data.get("suggestions"): # Usar .get() para evitar KeyError si 'suggestions' no existe
+                            st.markdown("**Sugerencias de Mejora:**")
+                            for suggestion in metric_data["suggestions"]:
+                                st.markdown(f"- {suggestion}")
+                        st.divider()
+
+        # Add evaluation button if game is ready for evaluation
+        if game_state.get("status") in ["cards_generated", "images_generated"] and not game_state.get("evaluation"):
+            if st.button("🤖 Evaluar Juego"):
+                with st.spinner("Un experto en diseño de juegos está analizando tu creación..."):
+                    result = call_api(f"{st.session_state.game_id}/evaluate")
+                    if result and result.get("status") == "evaluated":
+                        st.success("¡Evaluación completada! Los resultados se muestran arriba.")
+                        st.rerun()
 
     if st.session_state.current_step == "cards":
         if st.button("Generar Cartas"):

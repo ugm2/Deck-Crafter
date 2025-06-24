@@ -6,6 +6,7 @@ from deck_crafter.models.card import Card
 from deck_crafter.models.game_concept import GameConcept
 from deck_crafter.models.rules import Rules
 from deck_crafter.models.user_preferences import UserPreferences
+from deck_crafter.models.evaluation import GameEvaluation
 
 class GameStatus(str, Enum):
     CREATED = "created"
@@ -13,6 +14,7 @@ class GameStatus(str, Enum):
     RULES_GENERATED = "rules_generated"
     CARDS_GENERATED = "cards_generated"
     IMAGES_GENERATED = "images_generated"
+    EVALUATED = "evaluated"
 
 class CardGameState(BaseModel):
     game_id: str
@@ -22,5 +24,6 @@ class CardGameState(BaseModel):
     rules: Optional[Rules] = None
     cards: Optional[list[Card]] = None
     image_paths: Optional[dict[str, str]] = None
+    evaluation: Optional[GameEvaluation] = None
     created_at: datetime
     updated_at: datetime

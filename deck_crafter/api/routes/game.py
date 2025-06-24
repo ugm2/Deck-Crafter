@@ -10,9 +10,10 @@ from deck_crafter.workflow.specific_workflows import (
     create_cards_workflow,
     create_preferences_workflow,
     create_concept_and_rules_workflow,
-    create_image_generation_workflow
+    create_image_generation_workflow,
+    create_multi_agent_evaluation_workflow
 )
-from deck_crafter.services.llm_service import create_llm_service
+from deck_crafter.services.llm_service import create_llm_service, LLMService
 from deck_crafter.models.state import CardGameState, GameStatus
 from deck_crafter.utils.config import Config
 from deck_crafter.database import init_db, save_game_state as save_game_state_to_db, get_game_state as get_game_state_from_db, get_all_card_images
@@ -36,6 +37,7 @@ rules_workflow = create_rules_workflow(llm_service)
 cards_workflow = create_cards_workflow(llm_service)
 concept_and_rules_workflow = create_concept_and_rules_workflow(llm_service)
 image_workflow = create_image_generation_workflow(llm_service)
+evaluation_workflow = create_multi_agent_evaluation_workflow(llm_service)
 
 @router.post("/start")
 async def start_game(preferences: UserPreferences) -> Dict[str, str]:
@@ -186,10 +188,10 @@ async def generate_images(game_id: str) -> Dict[str, Any]:
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    if state.status != GameStatus.CARDS_GENERATED:
+    if state.status not in [GameStatus.CARDS_GENERATED, GameStatus.EVALUATED]:
         raise HTTPException(
             status_code=400,
-            detail="Cards must be generated before generating images"
+            detail="Cards must be generated or evaluated before generating images"
         )
     
     result = image_workflow.invoke(state, config={"configurable": {"thread_id": 1}})
@@ -199,4 +201,31 @@ async def generate_images(game_id: str) -> Dict[str, Any]:
     
     await save_game_state_to_db(state)
     
-    return {"status": state.status} 
+    return {"status": state.status}
+
+@router.post("/{game_id}/evaluate")
+async def evaluate_game(game_id: str) -> Dict[str, Any]:
+    """Genera una evaluación experta para un juego completo usando un comité de agentes."""
+    state = await get_game_state_from_db(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    if state.status not in [GameStatus.CARDS_GENERATED, GameStatus.IMAGES_GENERATED, GameStatus.EVALUATED]:
+        raise HTTPException(
+            status_code=400,
+            detail="Game must have at least cards generated to be evaluated."
+        )
+
+    initial_eval_state = {"game_state": state}
+    
+    result_state = evaluation_workflow.invoke(initial_eval_state, config={"configurable": {"thread_id": "eval-" + game_id}})
+    
+    final_game_state = result_state['game_state']
+    
+    await save_game_state_to_db(final_game_state)
+    
+    return {
+        "status": final_game_state.status.value,
+        "evaluation_summary": final_game_state.evaluation.summary,
+        "overall_score": final_game_state.evaluation.overall_score
+    } 

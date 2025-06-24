@@ -8,6 +8,7 @@ from deck_crafter.models.game_concept import GameConcept
 from deck_crafter.models.rules import Rules
 from deck_crafter.models.state import CardGameState, GameStatus
 from deck_crafter.models.user_preferences import UserPreferences
+from deck_crafter.models.evaluation import GameEvaluation
 import sqlite3
 
 DB_PATH = Path("deck_crafter.db")
@@ -23,6 +24,7 @@ async def init_db():
                 concept TEXT,
                 rules TEXT,
                 cards TEXT,
+                evaluation TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
@@ -45,8 +47,8 @@ async def save_game_state(state: CardGameState):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
             INSERT OR REPLACE INTO games 
-            (game_id, status, preferences, concept, rules, cards, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (game_id, status, preferences, concept, rules, cards, evaluation, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             state.game_id,
             state.status.value,
@@ -54,6 +56,7 @@ async def save_game_state(state: CardGameState):
             state.concept.model_dump_json() if state.concept else None,
             state.rules.model_dump_json() if state.rules else None,
             json.dumps([card.model_dump() for card in state.cards]) if state.cards else None,
+            state.evaluation.model_dump_json() if state.evaluation else None,
             state.created_at.isoformat(),
             state.updated_at.isoformat()
         ))
@@ -68,10 +71,11 @@ async def get_game_state(game_id: str) -> Optional[CardGameState]:
     if not row:
         return None
 
-    # Ensure correct deserialization for concept, rules, and cards
+    # Ensure correct deserialization for concept, rules, cards, and evaluation
     concept_data = json.loads(row[3]) if row[3] else None
     rules_data = json.loads(row[4]) if row[4] else None
     cards_data = json.loads(row[5]) if row[5] else None
+    evaluation_data = json.loads(row[6]) if row[6] else None
 
     return CardGameState(
         game_id=row[0],
@@ -80,8 +84,9 @@ async def get_game_state(game_id: str) -> Optional[CardGameState]:
         concept=GameConcept.model_validate(concept_data) if concept_data else None,
         rules=Rules.model_validate(rules_data) if rules_data else None,
         cards=[Card.model_validate(card) for card in cards_data] if cards_data else None,
-        created_at=datetime.fromisoformat(row[6]),
-        updated_at=datetime.fromisoformat(row[7])
+        evaluation=GameEvaluation.model_validate(evaluation_data) if evaluation_data else None,
+        created_at=datetime.fromisoformat(row[7]),
+        updated_at=datetime.fromisoformat(row[8])
     )
 
 async def save_card_image(game_id: str, card_name: str, image_data: bytes):
