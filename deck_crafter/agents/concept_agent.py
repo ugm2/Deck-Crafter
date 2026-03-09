@@ -8,7 +8,10 @@ from deck_crafter.services.llm_service import LLMService
 class ConceptGenerationAgent:
     DEFAULT_PROMPT = """
     You are a world-class card game designer.
-    Create a concept for a unique and engaging card game based on the following user preferences:
+    Create a concept for a unique and engaging card game based on the following user preferences.
+
+    CRITIQUE TO ADDRESS: An expert reviewed your previous attempt. You MUST address these points.
+    Critique: {critique}
 
     User preferences: {user_preferences}
 
@@ -28,7 +31,7 @@ class ConceptGenerationAgent:
         self.llm_service = llm_service
         self.base_prompt = base_prompt or self.DEFAULT_PROMPT
 
-    def generate_concept(self, state: CardGameState) -> CardGameState:
+    def generate_concept(self, state: CardGameState) -> dict:
         """
         Generate a game concept based on the user preferences in the given state.
 
@@ -36,16 +39,21 @@ class ConceptGenerationAgent:
         :return: Updated state with the generated game concept.
         """
         user_preferences: UserPreferences = state.preferences
+        critique = state.critique
 
-        context = self._prepare_context(user_preferences)
-
-        game_concept = self._generate_concept(context)
-
-        self._override_with_user_preferences(game_concept, user_preferences)
-
-        state.concept = game_concept
-
-        return state
+        context = {
+            "user_preferences": user_preferences.model_dump(),
+            "critique": critique or "This is the first attempt, no critique yet."
+        }
+        
+        game_concept = self.llm_service.generate(
+            output_model=GameConcept, prompt=self.base_prompt, **context
+        )
+        
+        if game_concept:
+            self._override_with_user_preferences(game_concept, user_preferences)
+            return {"concept": game_concept}
+        return {}
 
     def _prepare_context(self, user_preferences: UserPreferences) -> dict:
         """

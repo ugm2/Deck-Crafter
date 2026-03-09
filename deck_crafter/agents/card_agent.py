@@ -12,6 +12,9 @@ class CardGenerationAgent:
         You are a world-class card game designer.
         Based on the game concept and existing cards, generate the full details for the next card.
 
+        CRITIQUE TO ADDRESS: Your last attempt to generate this card was flawed. You MUST address the following points.
+        Critique: {critique}
+
         Game Concept:
         {game_concept}
 
@@ -26,7 +29,7 @@ class CardGenerationAgent:
         Quantity for this card: {quantity}
 
         Ensure the new card fits into the overall game strategy, interacts well with existing cards, matches the game's complexity level, and aligns with the game concept.
-        All textual fields (name, description, flavor_text, interactions) should be in '{game_concept[language]}'.
+        All textual fields (name, description, flavor_text, interactions) should be in '{language}'.
         """
     )
 
@@ -36,40 +39,32 @@ class CardGenerationAgent:
         self.llm_service = llm_service
         self.base_prompt = base_prompt or self.DEFAULT_PROMPT
 
-    def generate_card(self, state: CardGameState) -> CardGameState:
+    def generate_card(self, state: CardGameState) -> dict:
         game_concept: GameConcept = state.concept
         if state.cards is None:
             state.cards = []
         existing_cards: List[Card] = state.cards
+        critique = state.critique
 
         if len(existing_cards) >= game_concept.number_of_unique_cards:
-            # All cards have been generated
-            return state
+            return {}
 
         next_card_type = self._determine_next_card_type(game_concept, existing_cards)
         if not next_card_type:
-            # No more card types to generate
-            return state
+            return {}
 
-        num_cards_generated_for_type = self._get_num_cards_generated_for_type(
-            next_card_type, existing_cards
-        )
-
-        next_card = self._get_next_card_to_generate(
-            next_card_type, num_cards_generated_for_type, existing_cards
-        )
-        context = self._prepare_context(
-            game_concept, existing_cards, next_card, next_card_type
-        )
+        num_cards_generated_for_type = self._get_num_cards_generated_for_type(next_card_type, existing_cards)
+        next_card_to_generate_shell = self._get_next_card_to_generate(next_card_type, num_cards_generated_for_type, existing_cards)
+        
+        context = self._prepare_context(game_concept, existing_cards, next_card_to_generate_shell, next_card_type)
+        context["critique"] = critique or "First attempt, no critique yet."
+        
         new_card = self._generate_new_card(context)
 
         if new_card:
             existing_cards.append(new_card)
-            state.cards = existing_cards
-        else:
-            pass
-
-        return state
+            return {"cards": existing_cards}
+        return {}
 
     def _get_num_cards_generated_for_type(
         self, card_type: CardType, existing_cards: List[Card]
@@ -167,6 +162,7 @@ class CardGenerationAgent:
             "next_card_type": card_type.name,
             "card_type_description": card_type.description,
             "quantity": next_card.quantity,
+            "language": game_concept.language,
         }
         return context
 

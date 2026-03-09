@@ -11,6 +11,10 @@ class RuleGenerationAgent:
     ### ROLE & PERSONA ###
     Act as a world-class game designer and an expert technical writer. You are renowned for creating rulebooks that are elegant, comprehensive, and exceptionally easy to understand. Your goal is to write a rulebook so clear that it leaves no room for ambiguity or player arguments.
 
+    ### CRITIQUE TO ADDRESS (If any) ###
+    An expert reviewed your previous draft and provided feedback. You MUST address these points in your new version.
+    Critique: {critique}
+
     ### CORE PRINCIPLES OF A WORLD-CLASS RULEBOOK ###
     A professional rulebook is built on universal principles. When generating the content, you MUST ensure your output embodies these qualities:
     1.  **Unambiguous Goal & Setup:** A player must immediately understand the ultimate objective of the game and how to start a new game from scratch. The setup instructions must be a clear, step-by-step sequence.
@@ -42,7 +46,7 @@ class RuleGenerationAgent:
         self.llm_service = llm_service
         self.base_prompt = base_prompt or self.DEFAULT_PROMPT
 
-    def generate_rules(self, state: CardGameState) -> CardGameState:
+    def generate_rules(self, state: CardGameState) -> dict:
         """
         Generate comprehensive game rules based on the game concept.
 
@@ -50,15 +54,20 @@ class RuleGenerationAgent:
         :return: Updated state with the generated rules.
         """
         game_concept: GameConcept = state.concept
+        critique = state.critique
 
-        context = self._prepare_context(game_concept)
+        context = {
+            "game_concept": game_concept.model_dump(),
+            "critique": critique or "This is the first attempt, no critique yet."
+        }
 
-        rules = self._generate_rules(context)
+        rules = self.llm_service.generate(
+            output_model=Rules, prompt=self.base_prompt, **context
+        )
 
         if rules:
-            state.rules = rules
-
-        return state
+            return {"rules": rules}
+        return {}
 
     def _prepare_context(self, game_concept: GameConcept) -> dict:
         """

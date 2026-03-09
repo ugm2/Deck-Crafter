@@ -1,6 +1,7 @@
 from typing import Optional
 from deck_crafter.models.user_preferences import UserPreferences, RequiredUserPreferences
 from deck_crafter.services.llm_service import LLMService
+from deck_crafter.models.state import CardGameState
 
 
 class PreferencesGenerationAgent:
@@ -10,6 +11,9 @@ class PreferencesGenerationAgent:
     If any preference is already specified, respect it. If any is missing, complete it coherently with the description and other preferences.
     If the language preference is not specified, infer the language from the game description. Write all fields in the language you infer from the game description.
     Never leave a field empty or null.
+
+    CRITIQUE TO ADDRESS: An expert reviewed your previous attempt. You MUST address these points.
+    Critique: {critique}
 
     Game description: {game_description}
     Partial preferences: {partial_preferences}
@@ -28,15 +32,24 @@ class PreferencesGenerationAgent:
         self.llm_service = llm_service
         self.base_prompt = base_prompt or self.DEFAULT_PROMPT
 
-    def generate_preferences(self, game_description: str, partial_preferences: Optional[UserPreferences] = None) -> UserPreferences:
-        """
-        Generate user preferences based on the game description and any partial preferences provided by the user.
-        """
+    def generate_preferences(self, state: CardGameState) -> dict:
+        partial_preferences = state.preferences
+        game_description = partial_preferences.game_description
+        critique = state.critique
+        
         context = {
             "game_description": game_description,
-            "partial_preferences": partial_preferences.model_dump() if partial_preferences else {}
+            "partial_preferences": partial_preferences.model_dump(),
+            "critique": critique or "This is the first attempt, no critique yet."
         }
-        return self._generate_preferences(context)
+        
+        required = self.llm_service.generate(
+            output_model=RequiredUserPreferences, prompt=self.base_prompt, **context
+        )
+        # We need to preserve the original game_description
+        final_prefs = UserPreferences.model_validate(required.model_dump())
+        final_prefs.game_description = game_description
+        return {"preferences": final_prefs}
 
     def _generate_preferences(self, context: dict) -> UserPreferences:
         """

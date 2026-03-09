@@ -27,7 +27,7 @@ class RequiredUserPreferences(BaseModel):
     )
     number_of_players: str = Field(
         ..., 
-        pattern=r"^[0-9]+(-[0-9]+)?$", 
+        pattern=r"^[0-9]+(-[0-9]+)?$",
         description="The number of players the game is designed for (e.g., '2-4', '5-8')."
     )
     target_audience: str = Field(
