@@ -1,12 +1,17 @@
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel
+
 from deck_crafter.models.card import Card
 from deck_crafter.models.game_concept import GameConcept
 from deck_crafter.models.rules import Rules
 from deck_crafter.models.user_preferences import UserPreferences
 from deck_crafter.models.evaluation import GameEvaluation
+
+# --- LÓGICA DE ACTUALIZACIÓN PERSONALIZADA ---
+def last_write_wins(a, b):
+    return b
 
 class GameStatus(str, Enum):
     CREATED = "created"
@@ -22,8 +27,11 @@ class CardGameState(BaseModel):
     preferences: UserPreferences
     concept: Optional[GameConcept] = None
     rules: Optional[Rules] = None
-    cards: Optional[list[Card]] = None
+    cards: Optional[List[Card]] = None
     image_paths: Optional[dict[str, str]] = None
     evaluation: Optional[GameEvaluation] = None
     created_at: datetime
     updated_at: datetime
+    
+    critique: Optional[str] = None
+    refinement_count: int = 0

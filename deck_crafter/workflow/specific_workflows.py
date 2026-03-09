@@ -1,270 +1,175 @@
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
+
+from deck_crafter.models.state import CardGameState
+from deck_crafter.models.game_concept import GameConcept
+from deck_crafter.models.rules import Rules
+from deck_crafter.models.card import Card
+from deck_crafter.models.user_preferences import UserPreferences
+
+from deck_crafter.services.llm_service import LLMService
+from deck_crafter.agents.preferences_agent import PreferencesGenerationAgent
 from deck_crafter.agents.concept_agent import ConceptGenerationAgent
 from deck_crafter.agents.rules_agent import RuleGenerationAgent
 from deck_crafter.agents.card_agent import CardGenerationAgent
 from deck_crafter.agents.image_agent import ImageGenerationAgent
-from deck_crafter.models.state import CardGameState, GameStatus
-from deck_crafter.services.llm_service import LLMService
-from langgraph.checkpoint.memory import MemorySaver
-from deck_crafter.agents.preferences_agent import PreferencesGenerationAgent
-from deck_crafter.workflow.conditions import should_continue
-from typing import TypedDict, Optional
-from deck_crafter.agents.evaluation_agents import (
-    BalanceAgent,
-    CoherenceAgent,
-    ClarityAgent,
-    OriginalityAgent,
-    PlayabilityAgent,
-    EvaluationSynthesizerAgent,
-    FidelityAgent,
-)
-from deck_crafter.models.evaluation import (
-    BalanceEvaluation,
-    CoherenceEvaluation,
-    ClarityEvaluation,
-    OriginalityEvaluation,
-    PlayabilityEvaluation,
-    FidelityEvaluation,
-)
+from deck_crafter.agents.evaluation_agents import ValidatorAgent
+from .reflective_step import ReflectiveStep
+from .conditions import should_continue
+from .evaluation_workflow import create_multi_agent_evaluation_workflow
 
 
 def create_preferences_workflow(llm_service: LLMService) -> StateGraph:
-    """Create a workflow for generating user preferences from a game description and partial preferences."""
+    """Crea un workflow para generar preferencias con un ciclo de reflexión exigente."""
     preferences_agent = PreferencesGenerationAgent(llm_service)
+    validator = ValidatorAgent(llm_service)
+
+    # --- NUEVOS CRITERIOS EXIGENTES PARA PREFERENCIAS ---
+    preferences_criteria = """
+    Review against this strict checklist. A failure in any point means the output is invalid.
+    1.  **Completeness**: All fields (language, theme, game_style, number_of_players, target_audience, rule_complexity) MUST be filled with non-empty, meaningful strings.
+    2.  **Logical Consistency**: Check for contradictions. For example, if 'target_audience' is 'Niños' (Kids), 'rule_complexity' cannot be 'Hard' or 'Complex'. If 'game_style' is 'Party Game', 'number_of_players' should not be '2'.
+    3.  **Language Validity**: The 'language' field must be a single, real-world language name (e.g., 'Español', 'English'), not a mix or a sentence.
+    """
+
+    preferences_step = ReflectiveStep(
+        agent_method=preferences_agent.generate_preferences,
+        validator=validator,
+        model_class=UserPreferences,
+        state_key='preferences',
+        criteria=preferences_criteria,
+        max_attempts=3
+    )
     
-    def generate_preferences(state: CardGameState) -> CardGameState:
-        game_description = None
-        partial_preferences = None
-        if hasattr(state, 'preferences') and state.preferences:
-            game_description = getattr(state.preferences, 'game_description', None)
-            partial_preferences = state.preferences
-        if not game_description and hasattr(state, 'game_description'):
-            game_description = state.game_description
-        generated_preferences = preferences_agent.generate_preferences(
-            game_description=game_description,
-            partial_preferences=partial_preferences
-        )
-        state.preferences = generated_preferences
+    workflow = StateGraph(CardGameState)
+    def start_node(state: CardGameState):
+        state.refinement_count = 0
+        state.critique = None
         return state
+        
+    workflow.add_node("start", start_node)
+    workflow.set_entry_point("start")
+    preferences_step.add_to_graph(workflow, "start", END)
     
-    workflow = StateGraph(CardGameState)
-    
-    metadata = {
-        "model": llm_service.model_name,
-        "provider": llm_service.__class__.__name__,
-        "temperature": getattr(llm_service, "config", {}).get("temperature", getattr(getattr(llm_service, "config", {}).get("options", {}), "temperature", None)),
-        "max_tokens": getattr(llm_service, "config", {}).get("max_tokens", getattr(getattr(llm_service, "config", {}).get("options", {}), "num_predict", None)),
-        "workflow": "preferences_generation"
-    }
-    
-    workflow.add_node("generate_preferences", generate_preferences, metadata=metadata)
-    workflow.set_entry_point("generate_preferences")
-
-    return workflow.compile(checkpointer=MemorySaver())
-
-
-def create_concept_workflow(llm_service: LLMService) -> StateGraph:
-    """Create a workflow for generating a game concept."""
-    concept_agent = ConceptGenerationAgent(llm_service)
-    
-    def generate_concept(state: CardGameState) -> CardGameState:
-        return concept_agent.generate_concept(state)
-    
-    workflow = StateGraph(CardGameState)
-    
-    metadata = {
-        "model": llm_service.model_name,
-        "provider": llm_service.__class__.__name__,
-        "temperature": getattr(llm_service, "config", {}).get("temperature", getattr(getattr(llm_service, "config", {}).get("options", {}), "temperature", None)),
-        "max_tokens": getattr(llm_service, "config", {}).get("max_tokens", getattr(getattr(llm_service, "config", {}).get("options", {}), "num_predict", None)),
-        "workflow": "concept_generation"
-    }
-    
-    workflow.add_node("generate_concept", generate_concept, metadata=metadata)
-    workflow.set_entry_point("generate_concept")
-
-    return workflow.compile(checkpointer=MemorySaver())
-
-
-def create_rules_workflow(llm_service: LLMService) -> StateGraph:
-    """Create a workflow specifically for rules generation."""
-    rule_agent = RuleGenerationAgent(llm_service)
-    workflow = StateGraph(CardGameState)
-    
-    metadata = {
-        "model": llm_service.model_name,
-        "provider": llm_service.__class__.__name__,
-        "temperature": getattr(llm_service, "config", {}).get("temperature", getattr(getattr(llm_service, "config", {}).get("options", {}), "temperature", None)),
-        "max_tokens": getattr(llm_service, "config", {}).get("max_tokens", getattr(getattr(llm_service, "config", {}).get("options", {}), "num_predict", None)),
-        "workflow": "rules_generation"
-    }
-    
-    workflow.add_node("generate_rules", rule_agent.generate_rules, metadata=metadata)
-    workflow.set_entry_point("generate_rules")
-
-    return workflow.compile(checkpointer=MemorySaver())
-
-
-def create_cards_workflow(llm_service: LLMService) -> StateGraph:
-    """Create a workflow specifically for card generation."""
-    card_agent = CardGenerationAgent(llm_service)
-    workflow = StateGraph(CardGameState)
-    
-    metadata = {
-        "model": llm_service.model_name,
-        "provider": llm_service.__class__.__name__,
-        "temperature": getattr(llm_service, "config", {}).get("temperature", getattr(getattr(llm_service, "config", {}).get("options", {}), "temperature", None)),
-        "max_tokens": getattr(llm_service, "config", {}).get("max_tokens", getattr(getattr(llm_service, "config", {}).get("options", {}), "num_predict", None)),
-        "workflow": "cards_generation"
-    }
-    
-    workflow.add_node("generate_cards", card_agent.generate_card, metadata=metadata)
-
-    workflow.add_conditional_edges("generate_cards", should_continue)
-
-    workflow.set_entry_point("generate_cards")
-
     return workflow.compile(checkpointer=MemorySaver())
 
 
 def create_concept_and_rules_workflow(llm_service: LLMService) -> StateGraph:
-    """Create a workflow that combines concept and rules generation in sequence."""
+    """Crea un workflow de concepto y reglas con ciclos de reflexión exigentes."""
     concept_agent = ConceptGenerationAgent(llm_service)
     rule_agent = RuleGenerationAgent(llm_service)
+    validator = ValidatorAgent(llm_service)
+
+    # --- NUEVOS CRITERIOS EXIGENTES PARA CONCEPTO ---
+    concept_criteria = """
+    Review against this strict checklist. A failure in any point means the output is invalid.
+    1.  **Structural Integrity**: There MUST be at least 3 distinct `card_types`.
+    2.  **Mathematical Coherence**: The `number_of_unique_cards` field MUST be equal to the sum of all `unique_cards` values within the `card_types` list.
+    3.  **Title Quality**: The `title` must not be generic. It cannot contain the phrases 'Card Game', 'Juego de Cartas', or 'Deck'.
+    4.  **Description Depth**: The `description` must be at least 20 words long.
+    """
+
+    concept_step = ReflectiveStep(
+        agent_method=concept_agent.generate_concept,
+        validator=validator,
+        model_class=GameConcept,
+        state_key='concept',
+        criteria=concept_criteria,
+        max_attempts=3
+    )
+
+    # --- NUEVOS CRITERIOS EXIGENTES PARA REGLAS ---
+    rules_criteria = """
+    Review against this strict checklist. A failure in any single point means the entire output is invalid.
+    - **Completeness Check**: 
+        - Does the output explicitly define a `turn_limit`? If null, it is invalid.
+        - Does the output include a `glossary` with at least 4 defined terms? If not, it is invalid.
+        - Does the output provide at least 2 distinct `examples_of_play`? If not, it is invalid.
+    - **Clarity Check**: 
+        - Scan the `win_conditions`. Is there ANY word that could be considered ambiguous (e.g., 'about', 'approximately', 'might', 'could', 'usually')? If so, it is invalid.
+        - The `turn_structure` must contain at least 3 distinct phases. If not, it is invalid.
+    - **Coherence Check**:
+        - The `win_conditions` must directly and obviously relate to the core `description` of the game concept. The thematic link cannot be subtle. If it is, it is invalid.
+    """
     
+    rules_step = ReflectiveStep(
+        agent_method=rule_agent.generate_rules,
+        validator=validator,
+        model_class=Rules,
+        state_key='rules',
+        criteria=rules_criteria,
+        max_attempts=3
+    )
+
     workflow = StateGraph(CardGameState)
+    def start_node(state: CardGameState):
+        state.refinement_count = 0
+        state.critique = None
+        return state
     
-    metadata = {
-        "model": llm_service.model_name,
-        "provider": llm_service.__class__.__name__,
-        "temperature": getattr(llm_service, "config", {}).get("temperature", getattr(getattr(llm_service, "config", {}).get("options", {}), "temperature", None)),
-        "max_tokens": getattr(llm_service, "config", {}).get("max_tokens", getattr(getattr(llm_service, "config", {}).get("options", {}), "num_predict", None)),
-        "workflow": "concept_and_rules_generation"
-    }
+    workflow.add_node("start", start_node)
+    workflow.set_entry_point("start")
     
-    workflow.add_node("generate_concept", concept_agent.generate_concept, metadata=metadata)
-    workflow.add_node("generate_rules", rule_agent.generate_rules, metadata=metadata)
+    concept_step.add_to_graph(workflow, "start", "rules_entry_bridge")
     
-    workflow.add_edge("generate_concept", "generate_rules")
-    workflow.set_entry_point("generate_concept")
+    workflow.add_node("rules_entry_bridge", start_node)
+    rules_step.add_to_graph(workflow, "rules_entry_bridge", END)
     
+    return workflow.compile(checkpointer=MemorySaver())
+
+
+def create_cards_workflow(llm_service: LLMService) -> StateGraph:
+    """
+    Crea un workflow simple para la generación de cartas en un bucle,
+    sin el ciclo de reflexión, pero manteniendo el log de progreso.
+    """
+    card_agent = CardGenerationAgent(llm_service)
+    from .conditions import should_continue
+
+    workflow = StateGraph(CardGameState)
+
+    # Nodo 1: El generador de cartas
+    # Llama al método del agente para generar una única carta y actualizar el estado.
+    def generate_card_node(state: CardGameState) -> dict:
+        print(f"--- ATTEMPTING TO GENERATE CARD ---")
+        return card_agent.generate_card(state)
+
+    workflow.add_node("generate_card", generate_card_node)
+
+    # Nodo 2: El nodo que comprueba el progreso y actúa como ancla del bucle
+    def check_completion_node(state: CardGameState) -> dict:
+        """Este nodo comprueba el progreso y lo muestra en la terminal."""
+        current_cards_count = len(state.cards) if state.cards else 0
+        total_unique_cards = state.concept.number_of_unique_cards if state.concept else 0
+        
+        print(f"--- CARD PROGRESS: {current_cards_count} / {total_unique_cards} generated ---")
+        return {}
+    
+    workflow.add_node("check_completion", check_completion_node)
+
+    # El punto de entrada es el nodo de comprobación
+    workflow.set_entry_point("check_completion")
+
+    # Desde la comprobación, decidimos si generar o terminar
+    workflow.add_conditional_edges(
+        "check_completion",
+        should_continue,
+        {
+            "generate_cards": "generate_card",
+            END: END
+        }
+    )
+
+    # Después de generar una carta, volvemos a la comprobación para el siguiente ciclo
+    workflow.add_edge("generate_card", "check_completion")
+
     return workflow.compile(checkpointer=MemorySaver())
 
 
 def create_image_generation_workflow(llm_service: LLMService) -> StateGraph:
-    """Create a workflow specifically for image generation."""
+    """Crea un workflow simple para la generación de imágenes (sin reflexión)."""
     image_agent = ImageGenerationAgent(llm_service)
     workflow = StateGraph(CardGameState)
-    
-    metadata = {
-        "model": llm_service.model_name,
-        "provider": llm_service.__class__.__name__,
-        "temperature": getattr(llm_service, "config", {}).get("temperature", getattr(getattr(llm_service, "config", {}).get("options", {}), "temperature", None)),
-        "max_tokens": getattr(llm_service, "config", {}).get("max_tokens", getattr(getattr(llm_service, "config", {}).get("options", {}), "num_predict", None)),
-        "workflow": "image_generation"
-    }
-    
-    workflow.add_node("generate_images", image_agent.generate_images, metadata=metadata)
+    workflow.add_node("generate_images", image_agent.generate_images)
     workflow.set_entry_point("generate_images")
-
-    return workflow.compile(checkpointer=MemorySaver())
-
-
-class EvaluationWorkflowState(TypedDict):
-    """Define el estado para el workflow de evaluación, conteniendo el juego y los informes parciales."""
-    game_state: CardGameState
-    balance_report: Optional[BalanceEvaluation]
-    coherence_report: Optional[CoherenceEvaluation]
-    clarity_report: Optional[ClarityEvaluation]
-    originality_report: Optional[OriginalityEvaluation]
-    playability_report: Optional[PlayabilityEvaluation]
-    fidelity_report: Optional[FidelityEvaluation]
-
-def create_multi_agent_evaluation_workflow(llm_service: LLMService) -> StateGraph:
-    """
-    Crea un workflow que utiliza un comité de agentes expertos para evaluar un juego.
-    """
-    # Instanciar todos los agentes
-    balance_agent = BalanceAgent(llm_service)
-    coherence_agent = CoherenceAgent(llm_service)
-    clarity_agent = ClarityAgent(llm_service)
-    originality_agent = OriginalityAgent(llm_service)
-    playability_agent = PlayabilityAgent(llm_service)
-    fidelity_agent = FidelityAgent(llm_service)
-    synthesizer_agent = EvaluationSynthesizerAgent(llm_service)
-
-    # --- Nodos del Grafo ---
-    
-    def run_balance_analysis(state: EvaluationWorkflowState) -> dict:
-        game = state["game_state"]
-        report = balance_agent.evaluate(game.concept, game.rules, game.cards, game.concept.language)
-        return {"balance_report": report}
-
-    def run_coherence_analysis(state: EvaluationWorkflowState) -> dict:
-        game = state["game_state"]
-        report = coherence_agent.evaluate(game.concept, game.rules, game.cards, game.concept.language)
-        return {"coherence_report": report}
-
-    def run_clarity_analysis(state: EvaluationWorkflowState) -> dict:
-        game = state["game_state"]
-        report = clarity_agent.evaluate(game.concept, game.rules, game.cards, game.concept.language)
-        return {"clarity_report": report}
-
-    def run_originality_analysis(state: EvaluationWorkflowState) -> dict:
-        game = state["game_state"]
-        report = originality_agent.evaluate(game.concept, game.rules, game.cards, game.concept.language)
-        return {"originality_report": report}
-
-    def run_playability_analysis(state: EvaluationWorkflowState) -> dict:
-        game = state["game_state"]
-        report = playability_agent.evaluate(game.concept, game.rules, game.cards, game.concept.language)
-        return {"playability_report": report}
-
-    def run_fidelity_analysis(state: EvaluationWorkflowState) -> dict:
-        game = state["game_state"]
-        report = fidelity_agent.evaluate(
-            preferences=game.preferences,
-            concept=game.concept,
-            rules=game.rules,
-            language=game.concept.language,
-        )
-        return {"fidelity_report": report}
-        
-    def run_synthesis(state: EvaluationWorkflowState) -> dict:
-        final_evaluation = synthesizer_agent.synthesize(
-            balance_eval=state["balance_report"],
-            coherence_eval=state["coherence_report"],
-            clarity_eval=state["clarity_report"],
-            originality_eval=state["originality_report"],
-            playability_eval=state["playability_report"],
-            fidelity_eval=state["fidelity_report"],
-            language=state["game_state"].concept.language,
-        )
-        updated_game_state = state["game_state"].model_copy(deep=True)
-        updated_game_state.evaluation = final_evaluation
-        updated_game_state.status = GameStatus.EVALUATED
-        return {"game_state": updated_game_state}
-
-    workflow = StateGraph(EvaluationWorkflowState)
-    
-    workflow.add_node("balance_analyzer", run_balance_analysis)
-    workflow.add_node("coherence_analyzer", run_coherence_analysis)
-    workflow.add_node("clarity_analyzer", run_clarity_analysis)
-    workflow.add_node("originality_analyzer", run_originality_analysis)
-    workflow.add_node("playability_analyzer", run_playability_analysis)
-    workflow.add_node("fidelity_analyzer", run_fidelity_analysis)
-    
-    workflow.add_node("synthesizer", run_synthesis)
-
-    workflow.set_entry_point("balance_analyzer")
-    workflow.add_edge("balance_analyzer", "coherence_analyzer")
-    workflow.add_edge("coherence_analyzer", "clarity_analyzer")
-    workflow.add_edge("clarity_analyzer", "originality_analyzer")
-    workflow.add_edge("originality_analyzer", "playability_analyzer")
-    workflow.add_edge("playability_analyzer", "fidelity_analyzer")
-    
-    workflow.add_edge("fidelity_analyzer", "synthesizer")
-    
-    workflow.add_edge("synthesizer", END)
-
     return workflow.compile(checkpointer=MemorySaver())

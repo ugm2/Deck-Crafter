@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Type
 from deck_crafter.services.llm_service import LLMService
 from deck_crafter.models.game_concept import GameConcept
 from deck_crafter.models.rules import Rules
@@ -11,8 +11,10 @@ from deck_crafter.models.evaluation import (
     PlayabilityEvaluation,
     GameEvaluation,
     FidelityEvaluation,
+    ValidationResult,
 )
 from deck_crafter.models.user_preferences import UserPreferences
+from pydantic import BaseModel
 
 class BalanceAgent:
     """Evaluates exclusively the game's balance."""
@@ -377,4 +379,64 @@ class FidelityAgent:
             concept=concept.model_dump_json(indent=2),
             rules=rules.model_dump_json(indent=2),
             language=language,
+        )
+
+class ValidatorAgent:
+    """
+    Un agente genérico que valida una salida de datos contra su esquema Pydantic
+    y un conjunto de criterios de alto nivel.
+    """
+    PROMPT_TEMPLATE = """
+    ### ROLE & PERSONA ###
+    You are a meticulous and strict Quality Assurance Analyst. Your role is to assess a given data output and determine if it meets a specific set of requirements.
+
+    ### TASK ###
+    Evaluate the `Output to Validate` against the rules defined in `Target Schema` and `High-Level Criteria`. The descriptions within the schema are requirements.
+
+    ### INPUT DATA ###
+    1. **Target Schema**: The JSON Schema the output MUST conform to.
+    ```json
+    {target_schema}
+    ```
+    2. **Output to Validate**: The data to check.
+    ```json
+    {output_to_validate}
+    ```
+    3. **High-Level Criteria**: Extra rules to check.
+    ---
+    {high_level_criteria}
+    ---
+    4. **Surrounding Context (for consistency check)**:
+    ```json
+    {context_data_json}
+    ```
+
+    ### INSTRUCTIONS ###
+    - Analyze the output strictly.
+    - If ALL checks pass, respond with `is_valid: true` and `feedback: "OK"`.
+    - If ANY check fails, respond with `is_valid: false` and provide clear, actionable `feedback` explaining what to fix.
+    - Respond ONLY with the requested JSON format.
+    """
+
+    def __init__(self, llm_service: LLMService):
+        self.llm_service = llm_service
+
+    def validate(
+        self,
+        output_to_validate: BaseModel,
+        output_model: Type[BaseModel],
+        high_level_criteria: str,
+        context_data_json: str  # Ahora espera un string JSON
+    ) -> ValidationResult:
+        import json
+        target_schema_str = json.dumps(output_model.model_json_schema(), indent=2)
+        output_str = output_to_validate.model_dump_json(indent=2)
+        
+        return self.llm_service.generate(
+            output_model=ValidationResult,
+            prompt=self.PROMPT_TEMPLATE,
+            target_schema=target_schema_str,
+            output_to_validate=output_str,
+            high_level_criteria=high_level_criteria,
+            context_data_json=context_data_json
         )

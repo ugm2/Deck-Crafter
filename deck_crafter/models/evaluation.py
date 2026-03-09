@@ -50,3 +50,8 @@ class GameEvaluation(BaseModel):
     originality: OriginalityEvaluation
     playability: PlayabilityEvaluation
     fidelity: FidelityEvaluation
+
+class ValidationResult(BaseModel):
+    """Representa el resultado de una validación interna durante la generación."""
+    is_valid: bool = Field(..., description="True si la salida es aceptable, False si necesita revisión.")
+    feedback: str = Field(..., description="El feedback detallado. Si es válido, responde 'OK'. Si no, explica qué corregir.")
