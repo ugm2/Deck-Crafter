@@ -51,7 +51,7 @@ async def save_game_state(state: CardGameState):
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             state.game_id,
-            state.status.value,
+            state.status.value if hasattr(state.status, 'value') else state.status,
             state.preferences.model_dump_json(),
             state.concept.model_dump_json() if state.concept else None,
             state.rules.model_dump_json() if state.rules else None,
@@ -133,5 +133,17 @@ def save_card_image_sync(game_id: str, card_name: str, image_data: bytes) -> Non
             (game_id, card_name, image_data, datetime.now(timezone.utc))
         )
         conn.commit()
+    finally:
+        conn.close()
+
+def get_existing_card_images_sync(game_id: str) -> set:
+    """Get set of card names that already have images."""
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        cursor = conn.execute(
+            "SELECT card_name FROM card_images WHERE game_id = ?",
+            (game_id,)
+        )
+        return {row[0] for row in cursor.fetchall()}
     finally:
         conn.close() 

@@ -3,6 +3,7 @@ import requests
 import json
 from typing import Dict, Any
 import html
+import time
 
 # Helper function to clean and unescape text
 def clean_and_unescape_text(text_val: Any) -> str:
@@ -219,13 +220,13 @@ with st.expander("Preferencias del Juego (Opcional - Si no las especificas, se g
 
 start_game = st.button("Iniciar Juego")
 
-def call_api(endpoint: str, method: str = "POST", data: Dict[str, Any] = None) -> Dict[str, Any]:
+def call_api(endpoint: str, method: str = "POST", data: Dict[str, Any] = None, timeout: int = 300) -> Dict[str, Any]:
     try:
         url = f"http://localhost:8000/api/v1/games/{endpoint}"
         if method == "POST":
-            response = requests.post(url, json=data)
+            response = requests.post(url, json=data, timeout=timeout)
         else:
-            response = requests.get(url)
+            response = requests.get(url, timeout=timeout)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -266,7 +267,25 @@ if start_game:
 if load_game:
     if not game_id_input:
         st.error("No has proporcionado ningún ID válido")
-    st.session_state.game_id = game_id_input
+    else:
+        st.session_state.game_id = game_id_input
+        # Load game state to determine current step
+        loaded_state = call_api(f"{game_id_input}", method="GET")
+        if loaded_state:
+            status = loaded_state.get("status", "")
+            cards = loaded_state.get("cards", [])
+            has_cards = bool(cards)
+            all_have_images = has_cards and all(c.get("image_data") for c in cards)
+
+            if status == "images_generated" or all_have_images:
+                st.session_state.current_step = "complete"
+            elif status == "cards_generated" or has_cards:
+                st.session_state.current_step = "images"
+            elif status == "rules_generated":
+                st.session_state.current_step = "cards"
+            else:
+                st.session_state.current_step = "start"
+            st.rerun()
 
 if st.session_state.game_id:
     game_state = call_api(f"{st.session_state.game_id}", method="GET")
@@ -451,20 +470,42 @@ if st.session_state.game_id:
                         st.success("¡Evaluación completada! Los resultados se muestran arriba.")
                         st.rerun()
 
-    if st.session_state.current_step == "cards":
-        if st.button("Generar Cartas"):
-            with st.spinner("Generando cartas..."):
-                result = call_api(f"{st.session_state.game_id}/cards")
-                if result and result.get("status") == "cards_generated":
-                    st.session_state.current_step = "images"
-                    st.success("¡Cartas generadas! Ahora puedes generar las imágenes.")
-                    st.rerun()
+        # Show "Generar Cartas" button if we have rules but no cards
+        if st.session_state.current_step == "cards" or (game_state.get("rules") and not game_state.get("cards")):
+            if st.button("Generar Cartas"):
+                with st.spinner("Generando cartas..."):
+                    result = call_api(f"{st.session_state.game_id}/cards")
+                    if result and result.get("status") == "cards_generated":
+                        st.session_state.current_step = "images"
+                        st.success("¡Cartas generadas! Ahora puedes generar las imágenes.")
+                        st.rerun()
 
-if st.session_state.current_step == "images":
-    if st.button("Generar Imágenes"):
-        with st.spinner("Generando imágenes..."):
-            result = call_api(f"{st.session_state.game_id}/images")
-            if result and result.get("status") == "images_generated":
-                st.session_state.current_step = "complete"
-                st.success("¡Juego completado! Puedes ver el resultado completo arriba.")
-                st.rerun()
+        # Show "Generar Imágenes" button or progress if any cards are missing images
+        cards = game_state.get("cards", [])
+        cards_without_images = [c for c in cards if not c.get("image_data")]
+
+        # Check if generation is in progress
+        status_result = call_api(f"{st.session_state.game_id}/images/status", method="GET", timeout=10)
+        is_generating = status_result and status_result.get("generating", False)
+
+        if is_generating:
+            # Show progress
+            completed = status_result.get("completed", 0)
+            total = status_result.get("total", 0)
+            progress = status_result.get("progress_percent", 0)
+            remaining = status_result.get("remaining", 0)
+
+            st.info(f"🎨 Generando imágenes en segundo plano... {completed}/{total} completadas")
+            st.progress(progress / 100)
+            st.caption(f"⏱️ Tiempo estimado restante: ~{remaining * 1.5:.0f} minutos")
+
+            # Auto-refresh every 30 seconds
+            time.sleep(3)
+            st.rerun()
+        elif cards_without_images:
+            if st.button(f"🎨 Generar Imágenes ({len(cards_without_images)} pendientes)"):
+                # Start background generation
+                result = call_api(f"{st.session_state.game_id}/images", timeout=30)
+                if result and result.get("status") == "generating":
+                    st.success("¡Generación iniciada en segundo plano! Puedes cerrar esta página y volver más tarde.")
+                    st.rerun()

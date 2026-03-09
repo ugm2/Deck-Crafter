@@ -1,19 +1,21 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from typing import Dict, Any
 import uuid
 from datetime import datetime, timezone
 import base64
+import threading
+
+# Track which games are currently generating images
+_generating_images: Dict[str, bool] = {}
 from deck_crafter.models.user_preferences import UserPreferences
 from deck_crafter.workflow.specific_workflows import (
-    create_concept_workflow,
-    create_rules_workflow,
-    create_cards_workflow,
     create_preferences_workflow,
     create_concept_and_rules_workflow,
+    create_cards_workflow,
     create_image_generation_workflow,
     create_multi_agent_evaluation_workflow
 )
-from deck_crafter.services.llm_service import create_llm_service, LLMService
+from deck_crafter.services.llm_service import create_llm_service, create_fallback_llm_service, LLMService
 from deck_crafter.models.state import CardGameState, GameStatus
 from deck_crafter.utils.config import Config
 from deck_crafter.database import init_db, save_game_state as save_game_state_to_db, get_game_state as get_game_state_from_db, get_all_card_images
@@ -25,17 +27,27 @@ router = APIRouter()
 async def startup_event():
     await init_db()
 
-llm_service = create_llm_service(
-    provider=Config.LLM_PROVIDER,
-    model=Config.LLM_MODEL,
-    api_key=Config.GROQ_API_KEY
-)
+if Config.LLM_PROVIDER == "fallback":
+    llm_service = create_fallback_llm_service()
+elif Config.LLM_PROVIDER == "groq":
+    llm_service = create_llm_service(
+        provider="groq",
+        model=Config.GROQ_MODEL,
+        api_key=Config.GROQ_API_KEY
+    )
+elif Config.LLM_PROVIDER == "ollama":
+    llm_service = create_llm_service(
+        provider="ollama",
+        model=Config.OLLAMA_MODEL
+    )
+else:
+    llm_service = create_llm_service(
+        provider=Config.LLM_PROVIDER
+    )
 
 preferences_workflow = create_preferences_workflow(llm_service)
-concept_workflow = create_concept_workflow(llm_service)
-rules_workflow = create_rules_workflow(llm_service)
-cards_workflow = create_cards_workflow(llm_service)
 concept_and_rules_workflow = create_concept_and_rules_workflow(llm_service)
+cards_workflow = create_cards_workflow(llm_service)
 image_workflow = create_image_generation_workflow(llm_service)
 evaluation_workflow = create_multi_agent_evaluation_workflow(llm_service)
 
@@ -112,7 +124,7 @@ async def generate_concept(game_id: str) -> Dict[str, str]:
     if state.status != GameStatus.CREATED:
         raise HTTPException(status_code=400, detail="Invalid game state for concept generation")
     
-    result = concept_workflow.invoke(state, config={"configurable": {"thread_id": 1}})
+    result = concept_and_rules_workflow.invoke(state, config={"configurable": {"thread_id": 1}})
     result_state = CardGameState.model_validate(result)
     
     state.concept = result_state.concept
@@ -132,7 +144,7 @@ async def generate_rules(game_id: str) -> Dict[str, str]:
     if state.status != GameStatus.CONCEPT_GENERATED:
         raise HTTPException(status_code=400, detail="Invalid game state for rules generation")
     
-    result = rules_workflow.invoke(state, config={"configurable": {"thread_id": 1}})
+    result = concept_and_rules_workflow.invoke(state, config={"configurable": {"thread_id": 1}})
     
     state.rules = result["rules"]
     state.status = GameStatus.RULES_GENERATED
@@ -181,27 +193,60 @@ async def generate_concept_and_rules(game_id: str) -> Dict[str, str]:
     
     return {"status": GameStatus.RULES_GENERATED}
 
+def _run_image_generation(game_id: str, state: CardGameState):
+    """Background task to generate images."""
+    try:
+        _generating_images[game_id] = True
+        image_workflow.invoke(state, config={"configurable": {"thread_id": 1}})
+        # Status is updated by the workflow
+    except Exception as e:
+        print(f"Error generating images for {game_id}: {e}")
+    finally:
+        _generating_images[game_id] = False
+
 @router.post("/{game_id}/images")
-async def generate_images(game_id: str) -> Dict[str, Any]:
-    """Generate images for all cards in the game."""
+async def generate_images(game_id: str, background_tasks: BackgroundTasks) -> Dict[str, Any]:
+    """Generate images for all cards in the game (runs in background)."""
     state = await get_game_state_from_db(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    if state.status not in [GameStatus.CARDS_GENERATED, GameStatus.EVALUATED]:
+    if state.status not in [GameStatus.CARDS_GENERATED, GameStatus.EVALUATED, GameStatus.IMAGES_GENERATED]:
         raise HTTPException(
             status_code=400,
             detail="Cards must be generated or evaluated before generating images"
         )
-    
-    result = image_workflow.invoke(state, config={"configurable": {"thread_id": 1}})
-    
-    state.status = GameStatus.IMAGES_GENERATED
-    state.updated_at = datetime.now(timezone.utc)
-    
-    await save_game_state_to_db(state)
-    
-    return {"status": state.status}
+
+    # Check if already generating
+    if _generating_images.get(game_id, False):
+        return {"status": "generating", "message": "Image generation already in progress"}
+
+    # Start background generation
+    background_tasks.add_task(_run_image_generation, game_id, state)
+
+    return {"status": "generating", "message": "Image generation started in background"}
+
+@router.get("/{game_id}/images/status")
+async def get_image_generation_status(game_id: str) -> Dict[str, Any]:
+    """Check the status of image generation."""
+    is_generating = _generating_images.get(game_id, False)
+
+    state = await get_game_state_from_db(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    # Count images from database
+    images = await get_all_card_images(game_id)
+    total_cards = len(state.cards) if state.cards else 0
+    completed = len(images)
+
+    return {
+        "generating": is_generating,
+        "total": total_cards,
+        "completed": completed,
+        "remaining": total_cards - completed,
+        "progress_percent": round(completed / total_cards * 100, 1) if total_cards > 0 else 0
+    }
 
 @router.post("/{game_id}/evaluate")
 async def evaluate_game(game_id: str) -> Dict[str, Any]:
@@ -225,7 +270,7 @@ async def evaluate_game(game_id: str) -> Dict[str, Any]:
     await save_game_state_to_db(final_game_state)
     
     return {
-        "status": final_game_state.status.value,
+        "status": final_game_state.status.value if hasattr(final_game_state.status, 'value') else final_game_state.status,
         "evaluation_summary": final_game_state.evaluation.summary,
         "overall_score": final_game_state.evaluation.overall_score
     } 
