@@ -97,6 +97,21 @@ class GameConcept(BaseModel):
             "'Designed for casual play'."
         ),
     )
+    art_style: str = Field(
+        ...,
+        description=(
+            "The visual art style for all card illustrations (**required**). "
+            "Defines the consistent aesthetic across all game artwork. "
+            "Should be detailed enough to guide image generation for visual coherence. "
+            "Examples: 'Dark fantasy oil painting with muted colors and dramatic lighting', "
+            "'Vibrant anime-style with cel shading and bold outlines', "
+            "'Watercolor illustrations with soft pastels and dreamy atmosphere', "
+            "'Realistic digital art with cinematic lighting and high detail', "
+            "'Retro pixel art with limited color palette', "
+            "'Art nouveau style with ornate borders and flowing lines', "
+            "'Minimalist vector art with flat colors and geometric shapes'."
+        ),
+    )
 
     card_types: List[CardType] = Field(
         ...,

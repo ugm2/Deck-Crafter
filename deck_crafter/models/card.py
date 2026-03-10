@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field
 
 
@@ -89,4 +89,12 @@ class Card(BaseModel):
             "Base64 encoded image data for the card (**optional**). "
             "Used to store the card's visual representation."
         ),
+    )
+
+
+class CardBatch(BaseModel):
+    """A batch of cards generated together in a single LLM call."""
+    cards: List["Card"] = Field(
+        ...,
+        description="List of cards generated in this batch."
     )

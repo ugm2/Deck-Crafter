@@ -9,6 +9,7 @@ class UserPreferences(BaseModel):
     number_of_players: Optional[str] = None
     target_audience: Optional[str] = None
     rule_complexity: Optional[str] = None
+    art_style: Optional[str] = None
     game_description: Optional[str] = None
 
 class RequiredUserPreferences(BaseModel):
@@ -37,6 +38,10 @@ class RequiredUserPreferences(BaseModel):
     rule_complexity: str = Field(
         ...,
         description="The complexity of the rules (e.g., 'Easy', 'Medium', 'Hard')."
+    )
+    art_style: str = Field(
+        ...,
+        description="The visual art style for card illustrations (e.g., 'Dark fantasy oil painting', 'Vibrant anime', 'Watercolor', 'Minimalist vector art')."
     )
     game_description: str = Field(
         ...,
