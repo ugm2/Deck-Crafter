@@ -169,6 +169,90 @@ if 'game_id' not in st.session_state:
     st.session_state.game_id = None
 if 'current_step' not in st.session_state:
     st.session_state.current_step = 'start'
+if 'premium_mode' not in st.session_state:
+    st.session_state.premium_mode = False
+if 'premium_provider' not in st.session_state:
+    st.session_state.premium_provider = "gemini"
+if 'gemini_model' not in st.session_state:
+    st.session_state.gemini_model = "gemini-3.1-pro-preview"
+
+# Available Gemini models
+GEMINI_MODELS = {
+    "gemini-3.1-pro-preview": "Gemini 3.1 Pro Preview (Recomendado)",
+    "gemini-3.1-flash-lite-preview": "Gemini 3.1 Flash Lite",
+    "gemini-2.5-pro-preview-06-05": "Gemini 2.5 Pro",
+    "gemini-2.0-flash": "Gemini 2.0 Flash",
+}
+
+# Premium mode toggle in sidebar
+with st.sidebar:
+    st.subheader("Modo de Generación")
+    premium_mode = st.toggle(
+        "Modo Premium",
+        value=st.session_state.premium_mode,
+        help="Usa modelos premium para mayor calidad"
+    )
+    st.session_state.premium_mode = premium_mode
+
+    if premium_mode:
+        premium_provider = st.selectbox(
+            "Proveedor Premium",
+            options=["gemini", "groq"],
+            format_func=lambda x: "Gemini" if x == "gemini" else "Groq GPT-OSS-20B",
+            index=0 if st.session_state.premium_provider == "gemini" else 1,
+        )
+        st.session_state.premium_provider = premium_provider
+
+        # Show model selector for Gemini
+        if premium_provider == "gemini":
+            model_options = list(GEMINI_MODELS.keys())
+            current_idx = model_options.index(st.session_state.gemini_model) if st.session_state.gemini_model in model_options else 0
+            gemini_model = st.selectbox(
+                "Modelo Gemini",
+                options=model_options,
+                format_func=lambda x: GEMINI_MODELS.get(x, x),
+                index=current_idx,
+                help="Gemini 2.5 Pro ofrece mejor calidad pero es más lento"
+            )
+            st.session_state.gemini_model = gemini_model
+
+        st.warning(f"⚠️ Modo Premium: {premium_provider.upper()}")
+    else:
+        st.info("Modo estándar (gratuito)")
+
+    st.markdown("---")
+
+    # Refinement controls
+    st.subheader("Refinamiento Iterativo")
+    st.session_state.setdefault("refine_enabled", False)
+    st.session_state.setdefault("refine_max_iterations", 3)
+    st.session_state.setdefault("refine_threshold", 6.0)
+
+    st.session_state.refine_enabled = st.toggle(
+        "Habilitar refinamiento",
+        value=st.session_state.refine_enabled,
+        help="Permite refinar el juego después de la evaluación"
+    )
+
+    if st.session_state.refine_enabled:
+        st.session_state.refine_max_iterations = st.slider(
+            "Máx iteraciones",
+            min_value=1,
+            max_value=5,
+            value=st.session_state.refine_max_iterations,
+            help="Número máximo de ciclos de refinamiento"
+        )
+
+        st.session_state.refine_threshold = st.slider(
+            "Umbral de calidad",
+            min_value=4.0,
+            max_value=8.0,
+            value=st.session_state.refine_threshold,
+            step=0.5,
+            help="Puntuación mínima aceptable (el refinamiento se detiene al alcanzarla)"
+        )
+
+    st.markdown("---")
 
 st.markdown('<div class="game-title">🎮 Deck Crafter</div>', unsafe_allow_html=True)
 st.markdown("Crea tu propio juego de cartas con IA")
@@ -217,12 +301,29 @@ with st.expander("Preferencias del Juego (Opcional - Si no las especificas, se g
         placeholder="Ejemplo: simple, media, compleja",
         key="rule_complexity"
     )
+    st.text_input(
+        "Estilo Artístico",
+        placeholder="Ejemplo: fantasía oscura al óleo, anime vibrante, acuarela...",
+        key="art_style",
+        help="Define el estilo visual de las ilustraciones de las cartas"
+    )
 
 start_game = st.button("Iniciar Juego")
 
 def call_api(endpoint: str, method: str = "POST", data: Dict[str, Any] = None, timeout: int = 300) -> Dict[str, Any]:
     try:
         url = f"http://localhost:8000/api/v1/games/{endpoint}"
+        # Add premium query params
+        premium = st.session_state.get("premium_mode", False)
+        premium_provider = st.session_state.get("premium_provider", "gemini")
+        separator = "&" if "?" in endpoint else "?"
+        url += f"{separator}premium={str(premium).lower()}&premium_provider={premium_provider}"
+
+        # Add model parameter for Gemini
+        if premium and premium_provider == "gemini":
+            gemini_model = st.session_state.get("gemini_model", "gemini-3.1-pro-preview")
+            url += f"&model={gemini_model}"
+
         if method == "POST":
             response = requests.post(url, json=data, timeout=timeout)
         else:
@@ -244,25 +345,107 @@ if start_game:
             "game_style": st.session_state.get("game_style") or None,
             "number_of_players": st.session_state.get("number_of_players") or None,
             "target_audience": st.session_state.get("target_audience") or None,
-            "rule_complexity": st.session_state.get("rule_complexity") or None
+            "rule_complexity": st.session_state.get("rule_complexity") or None,
+            "art_style": st.session_state.get("art_style") or None
         }
-        
-        with st.spinner("Iniciando juego y generando concepto y reglas..."):
-            result = call_api("start", data=data)
-            if result and "game_id" in result:
+
+        refine_enabled = st.session_state.get("refine_enabled", False)
+        max_iters = st.session_state.get("refine_max_iterations", 3)
+        threshold = st.session_state.get("refine_threshold", 6.0)
+
+        if refine_enabled:
+            # Full automatic flow with progress
+            with st.status("🚀 Generando juego completo...", expanded=True) as status:
+                # Step 1: Start game
+                st.write("📝 Iniciando juego...")
+                result = call_api("start", data=data)
+                if not result or "game_id" not in result:
+                    st.error("Error al iniciar el juego")
+                    st.stop()
+
                 st.session_state.game_id = result["game_id"]
-                game_state = call_api(f"{st.session_state.game_id}", method="GET")
-                if game_state and "preferences" in game_state:
-                    st.session_state["_pending_preferences"] = game_state["preferences"]
-                
-                concept_rules_result = call_api(f"{st.session_state.game_id}/concept-and-rules")
-                if concept_rules_result and concept_rules_result.get("status") == "rules_generated":
-                    st.session_state.current_step = "cards"
-                    st.success("¡Juego iniciado! Ahora puedes generar las cartas.")
-                    st.rerun()
-            else:
-                st.session_state.game_id = None
-                st.session_state.current_step = 'start'
+                game_id = st.session_state.game_id
+                st.write(f"✅ Juego creado: `{game_id}`")
+
+                # Step 2: Concept and Rules
+                st.write("🎲 Generando concepto y reglas...")
+                concept_result = call_api(f"{game_id}/concept-and-rules")
+                if not concept_result or concept_result.get("status") != "rules_generated":
+                    st.error("Error al generar concepto y reglas")
+                    st.stop()
+                st.write("✅ Concepto y reglas generados")
+
+                # Step 3: Cards
+                st.write("🃏 Generando cartas...")
+                cards_result = call_api(f"{game_id}/cards", timeout=600)
+                if not cards_result or cards_result.get("status") != "cards_generated":
+                    st.error("Error al generar cartas")
+                    st.stop()
+                st.write("✅ Cartas generadas")
+
+                # Step 4: Evaluate
+                st.write("🤖 Evaluando juego...")
+                eval_result = call_api(f"{game_id}/evaluate")
+                if not eval_result:
+                    st.error("Error al evaluar el juego")
+                    st.stop()
+
+                current_score = eval_result.get("overall_score", 0)
+                st.write(f"📊 Puntuación inicial: **{current_score:.1f}/10**")
+
+                # Step 5: Refine if needed (using refine-step for real-time updates)
+                if current_score < threshold:
+                    st.write(f"🔄 Refinando (objetivo: {threshold}, máx {max_iters} iteraciones)...")
+                    iteration = 0
+                    final_score = current_score
+                    while iteration < max_iters and final_score < threshold:
+                        iteration += 1
+                        st.write(f"  ⏳ Iteración {iteration}/{max_iters}...")
+                        step_result = call_api(
+                            f"{game_id}/refine-step?threshold={threshold}",
+                            timeout=600
+                        )
+                        if not step_result:
+                            st.write(f"  ❌ Error en iteración {iteration}")
+                            break
+                        if step_result.get("status") == "threshold_met":
+                            final_score = step_result.get("score", final_score)
+                            st.write(f"  ✅ Umbral alcanzado: **{final_score:.1f}/10**")
+                            break
+                        prev = step_result.get("previous_score", 0)
+                        new = step_result.get("new_score", 0)
+                        improvement = step_result.get("improvement", 0)
+                        sign = "+" if improvement > 0 else ""
+                        st.write(f"  📊 {prev:.1f} → **{new:.1f}** ({sign}{improvement:.1f})")
+                        final_score = new
+                    if final_score >= threshold:
+                        st.write(f"✅ ¡Refinamiento exitoso! Puntuación final: **{final_score:.1f}/10**")
+                    else:
+                        st.write(f"📈 Mejor puntuación alcanzada: **{final_score:.1f}/10** ({iteration} iteraciones)")
+                else:
+                    st.write(f"✅ ¡Puntuación ya cumple el umbral!")
+
+                status.update(label="✅ ¡Juego completo!", state="complete", expanded=False)
+                st.session_state.current_step = "complete"
+                st.rerun()
+        else:
+            # Original manual flow
+            with st.spinner("Iniciando juego y generando concepto y reglas..."):
+                result = call_api("start", data=data)
+                if result and "game_id" in result:
+                    st.session_state.game_id = result["game_id"]
+                    game_state = call_api(f"{st.session_state.game_id}", method="GET")
+                    if game_state and "preferences" in game_state:
+                        st.session_state["_pending_preferences"] = game_state["preferences"]
+
+                    concept_rules_result = call_api(f"{st.session_state.game_id}/concept-and-rules")
+                    if concept_rules_result and concept_rules_result.get("status") == "rules_generated":
+                        st.session_state.current_step = "cards"
+                        st.success("¡Juego iniciado! Ahora puedes generar las cartas.")
+                        st.rerun()
+                else:
+                    st.session_state.game_id = None
+                    st.session_state.current_step = 'start'
 
 if load_game:
     if not game_id_input:
@@ -273,7 +456,7 @@ if load_game:
         loaded_state = call_api(f"{game_id_input}", method="GET")
         if loaded_state:
             status = loaded_state.get("status", "")
-            cards = loaded_state.get("cards", [])
+            cards = loaded_state.get("cards") or []
             has_cards = bool(cards)
             all_have_images = has_cards and all(c.get("image_data") for c in cards)
 
@@ -313,6 +496,7 @@ if st.session_state.game_id:
                 st.markdown(f"""🎯 <b>Audiencia:</b> {clean_and_unescape_text(concept.get("target_audience", "No especificado"))}""", unsafe_allow_html=True)
                 st.markdown(f"""🎨 <b>Tema:</b> {clean_and_unescape_text(concept.get("theme", "No especificado"))}""", unsafe_allow_html=True)
                 st.markdown(f"""🎮 <b>Estilo:</b> {clean_and_unescape_text(concept.get("game_style", "No especificado"))}""", unsafe_allow_html=True)
+                st.markdown(f"""🖼️ <b>Estilo Artístico:</b> {clean_and_unescape_text(concept.get("art_style", "No especificado"))}""", unsafe_allow_html=True)
                 st.markdown(f"""⏳ <b>Duración Estimada:</b> {clean_and_unescape_text(concept.get("game_duration", "No especificado"))}""", unsafe_allow_html=True)
                 st.markdown(f"""📚 <b>Cartas Únicas Requeridas:</b> {clean_and_unescape_text(concept.get("number_of_unique_cards", "No especificado"))}""", unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -439,27 +623,72 @@ if st.session_state.game_id:
             st.info(evaluation.get('summary', 'No hay resumen disponible.'))
 
             with st.expander("Ver Análisis Detallado"):
-                # Mapeo de las claves del modelo a títulos amigables para la interfaz
+                # Mapeo de las claves del modelo a títulos amigables para la interfaz (5 métricas con pesos)
                 metric_map = {
-                    "balance": "Balance",
-                    "coherence": "Coherencia",
-                    "clarity": "Claridad",
-                    "originality": "Originalidad",
-                    "playability": "Jugabilidad",
-                    "fidelity": "Fidelidad a la Petición"
+                    "playability": ("Jugabilidad", 2.0),  # Most important
+                    "balance": ("Balance", 1.5),
+                    "clarity": ("Claridad", 1.2),
+                    "theme_alignment": ("Alineación Temática", 1.0),
+                    "innovation": ("Innovación", 0.8),
                 }
 
-                for key, title in metric_map.items():
-                    # Asegurarse de que la clave exista antes de intentar acceder
+                for key, (title, weight) in metric_map.items():
                     if key in evaluation:
                         metric_data = evaluation[key]
-                        st.subheader(f"{title} (Puntuación: {metric_data.get('score', 'N/A')}/10)")
+                        score = metric_data.get('adjusted_score') or metric_data.get('score', 'N/A')
+                        score_display = f"{score:.1f}" if isinstance(score, float) else score
+                        st.subheader(f"{title} (Puntuación: {score_display}/10, peso: {weight})")
                         st.markdown(f"**Análisis:** {metric_data.get('analysis', 'No hay análisis disponible.')}")
-                        if metric_data.get("suggestions"): # Usar .get() para evitar KeyError si 'suggestions' no existe
+                        if metric_data.get("adjustment_reason"):
+                            st.caption(f"📊 Ajuste: {metric_data.get('adjustment_reason')}")
+                        if metric_data.get("suggestions"):
                             st.markdown("**Sugerencias de Mejora:**")
                             for suggestion in metric_data["suggestions"]:
                                 st.markdown(f"- {suggestion}")
                         st.divider()
+
+            # Show refinement button if enabled and score is below threshold
+            if st.session_state.get("refine_enabled", False):
+                current_score = evaluation.get('overall_score', 0)
+                threshold = st.session_state.get("refine_threshold", 6.0)
+                max_iters = st.session_state.get("refine_max_iterations", 3)
+
+                if current_score < threshold:
+                    st.warning(f"⚠️ Puntuación ({current_score:.1f}) por debajo del umbral ({threshold})")
+                    if st.button("🔄 Refinar Juego"):
+                        with st.status(f"🔄 Refinando (máx {max_iters} iteraciones)...", expanded=True) as refine_status:
+                            iteration = 0
+                            final_score = current_score
+                            while iteration < max_iters and final_score < threshold:
+                                iteration += 1
+                                st.write(f"⏳ Iteración {iteration}/{max_iters}...")
+                                step_result = call_api(
+                                    f"{st.session_state.game_id}/refine-step?threshold={threshold}",
+                                    timeout=600
+                                )
+                                if not step_result:
+                                    st.write(f"❌ Error en iteración {iteration}")
+                                    break
+                                if step_result.get("status") == "threshold_met":
+                                    final_score = step_result.get("score", final_score)
+                                    st.write(f"✅ Umbral alcanzado: **{final_score:.1f}/10**")
+                                    break
+                                prev = step_result.get("previous_score", 0)
+                                new = step_result.get("new_score", 0)
+                                improvement = step_result.get("improvement", 0)
+                                sign = "+" if improvement > 0 else ""
+                                st.write(f"📊 {prev:.1f} → **{new:.1f}** ({sign}{improvement:.1f})")
+                                final_score = new
+
+                            if final_score >= threshold:
+                                refine_status.update(label="✅ Refinamiento exitoso", state="complete")
+                                st.success(f"Puntuación final: {final_score:.1f}/10")
+                            else:
+                                refine_status.update(label=f"📈 Mejor puntuación: {final_score:.1f}", state="complete")
+                                st.info(f"No alcanzó el umbral ({threshold}) tras {iteration} iteraciones")
+                        st.rerun()
+                else:
+                    st.success(f"✅ ¡El juego cumple el umbral de calidad! ({current_score:.1f} >= {threshold})")
 
         # Add evaluation button if game is ready for evaluation
         if game_state.get("status") in ["cards_generated", "images_generated"] and not game_state.get("evaluation"):
@@ -481,7 +710,7 @@ if st.session_state.game_id:
                         st.rerun()
 
         # Show "Generar Imágenes" button or progress if any cards are missing images
-        cards = game_state.get("cards", [])
+        cards = game_state.get("cards") or []
         cards_without_images = [c for c in cards if not c.get("image_data")]
 
         # Check if generation is in progress
