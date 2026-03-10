@@ -1,5 +1,6 @@
 from langgraph.graph import StateGraph
-from langgraph.checkpoint.memory import MemorySaver
+
+from deck_crafter.workflow.checkpointer import create_checkpointer
 from deck_crafter.models.state import CardGameState
 from deck_crafter.services.llm_service import LLMService
 from deck_crafter.workflow.specific_workflows import (
@@ -22,4 +23,4 @@ def create_game_workflow(llm_service: LLMService) -> StateGraph:
     
     workflow.set_entry_point("generate_concept")
     
-    return workflow.compile(checkpointer=MemorySaver())
+    return workflow.compile(checkpointer=create_checkpointer())

@@ -101,13 +101,31 @@ class GroqService(LLMService):
         **context
     ) -> BaseModel:
         formatted_prompt = prompt.format(**context)
-        response = self.client.chat.completions.create(
-            model=self.model_name,
-            response_model=output_model,
-            messages=[{'role': 'user', 'content': formatted_prompt}],
-            **self.config
-        )
-        return response
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                response_model=output_model,
+                messages=[{'role': 'user', 'content': formatted_prompt}],
+                max_retries=2,
+                **self.config
+            )
+            return response
+        except Exception as e:
+            # Handle case where model returns array instead of object
+            error_str = str(e)
+            if "validation error" in error_str.lower() or "list" in error_str.lower():
+                logger.warning(f"Groq validation error, likely array response: {e}")
+                # Retry with stronger single-object instruction
+                retry_prompt = formatted_prompt + "\n\nCRITICAL: Output a SINGLE JSON object, NOT an array. Do not wrap in []."
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    response_model=output_model,
+                    messages=[{'role': 'user', 'content': retry_prompt}],
+                    max_retries=1,
+                    **self.config
+                )
+                return response
+            raise
 
 
 class OpenAICompatibleService(LLMService):
@@ -147,13 +165,30 @@ class OpenAICompatibleService(LLMService):
         **context
     ) -> BaseModel:
         formatted_prompt = prompt.format(**context)
-        response = self.client.chat.completions.create(
-            model=self.model_name,
-            response_model=output_model,
-            messages=[{'role': 'user', 'content': formatted_prompt}],
-            **self.config
-        )
-        return response
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                response_model=output_model,
+                messages=[{'role': 'user', 'content': formatted_prompt}],
+                max_retries=2,
+                **self.config
+            )
+            return response
+        except Exception as e:
+            # Handle case where model returns array instead of object
+            error_str = str(e)
+            if "validation error" in error_str.lower() or "list" in error_str.lower():
+                logger.warning(f"OpenAI-compatible validation error, likely array response: {e}")
+                retry_prompt = formatted_prompt + "\n\nCRITICAL: Output a SINGLE JSON object, NOT an array. Do not wrap in []."
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    response_model=output_model,
+                    messages=[{'role': 'user', 'content': retry_prompt}],
+                    max_retries=1,
+                    **self.config
+                )
+                return response
+            raise
 
 
 class SambanovaService(OpenAICompatibleService):
@@ -183,6 +218,16 @@ class DeepSeekService(OpenAICompatibleService):
             model=model or Config.DEEPSEEK_MODEL,
             api_key=api_key or Config.DEEPSEEK_API_KEY,
             base_url="https://api.deepseek.com/v1",
+            **kwargs
+        )
+
+
+class GeminiService(OpenAICompatibleService):
+    def __init__(self, model: str = None, api_key: str = None, **kwargs):
+        super().__init__(
+            model=model or Config.GEMINI_MODEL,
+            api_key=api_key or Config.GEMINI_API_KEY,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             **kwargs
         )
 
@@ -227,6 +272,7 @@ class LLMProviderRegistry:
         'sambanova': SambanovaService,
         'openrouter': OpenRouterService,
         'deepseek': DeepSeekService,
+        'gemini': GeminiService,
     }
 
     @classmethod
@@ -246,13 +292,45 @@ def create_llm_service(provider: str = "ollama", **kwargs) -> LLMService:
     return LLMProviderRegistry.create_provider(provider, **kwargs)
 
 
+def create_premium_llm_service() -> LLMService:
+    """Create premium LLM service using Gemini 3.1 Flash Lite.
+
+    Falls back to Groq, then standard fallback chain if not available.
+    """
+    if Config.GEMINI_API_KEY:
+        try:
+            service = GeminiService()
+            logger.info(f"Premium LLM service initialized with Gemini {Config.GEMINI_MODEL}")
+            return service
+        except Exception as e:
+            logger.warning(f"Could not initialize Gemini premium: {e}")
+
+    if Config.GROQ_API_KEY:
+        try:
+            service = GroqService(model=Config.GROQ_PREMIUM_MODEL, max_tokens=16384)
+            logger.info(f"Premium LLM service initialized with Groq {Config.GROQ_PREMIUM_MODEL}")
+            return service
+        except Exception as e:
+            logger.warning(f"Could not initialize Groq premium: {e}")
+
+    logger.warning("Premium provider not available, falling back to standard chain")
+    return create_fallback_llm_service()
+
+
 def create_fallback_llm_service() -> LLMService:
     """Create LLM service with automatic fallback through multiple providers.
 
-    Priority order: Sambanova > Groq > OpenRouter > DeepSeek > Ollama
+    Priority order: Gemini > Sambanova > Groq > OpenRouter > DeepSeek > Ollama
     Only providers with configured API keys are included.
     """
     providers = []
+
+    if Config.GEMINI_API_KEY:
+        try:
+            providers.append(GeminiService())
+            logger.info("Added Gemini to fallback chain")
+        except Exception as e:
+            logger.warning(f"Could not initialize Gemini: {e}")
 
     if Config.SAMBANOVA_API_KEY:
         try:

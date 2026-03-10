@@ -1,5 +1,6 @@
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
+
+from deck_crafter.workflow.checkpointer import create_checkpointer
 
 from deck_crafter.models.state import CardGameState
 from deck_crafter.models.game_concept import GameConcept
@@ -17,6 +18,7 @@ from deck_crafter.agents.evaluation_agents import ValidatorAgent
 from .reflective_step import ReflectiveStep
 from .conditions import should_continue
 from .evaluation_workflow import create_multi_agent_evaluation_workflow
+from .refinement_workflow import create_refinement_workflow
 
 
 def create_preferences_workflow(llm_service: LLMService) -> StateGraph:
@@ -51,7 +53,7 @@ def create_preferences_workflow(llm_service: LLMService) -> StateGraph:
     workflow.set_entry_point("start")
     preferences_step.add_to_graph(workflow, "start", END)
     
-    return workflow.compile(checkpointer=MemorySaver())
+    return workflow.compile(checkpointer=create_checkpointer())
 
 
 def create_concept_and_rules_workflow(llm_service: LLMService) -> StateGraph:
@@ -64,7 +66,7 @@ def create_concept_and_rules_workflow(llm_service: LLMService) -> StateGraph:
     concept_criteria = """
     Review against this strict checklist. A failure in any point means the output is invalid.
     1.  **Structural Integrity**: There MUST be at least 3 distinct `card_types`.
-    2.  **Mathematical Coherence**: The `number_of_unique_cards` field MUST be equal to the sum of all `unique_cards` values within the `card_types` list.
+    2.  **Card Type Validity**: Each `card_type` MUST have a positive `unique_cards` value (at least 1). The sum of all `unique_cards` should be reasonable (between 20 and 150 total).
     3.  **Title Quality**: The `title` must not be generic. It cannot contain the phrases 'Card Game', 'Juego de Cartas', or 'Deck'.
     4.  **Description Depth**: The `description` must be at least 20 words long.
     """
@@ -115,55 +117,54 @@ def create_concept_and_rules_workflow(llm_service: LLMService) -> StateGraph:
     workflow.add_node("rules_entry_bridge", start_node)
     rules_step.add_to_graph(workflow, "rules_entry_bridge", END)
     
-    return workflow.compile(checkpointer=MemorySaver())
+    return workflow.compile(checkpointer=create_checkpointer())
 
 
 def create_cards_workflow(llm_service: LLMService) -> StateGraph:
     """
-    Crea un workflow simple para la generación de cartas en un bucle,
-    sin el ciclo de reflexión, pero manteniendo el log de progreso.
+    Crea un workflow para la generación de cartas en lotes (batch).
+    Genera 5 cartas por llamada LLM para mayor eficiencia.
     """
     card_agent = CardGenerationAgent(llm_service)
     from .conditions import should_continue
+    from deck_crafter.agents.card_agent import CARD_BATCH_SIZE
 
     workflow = StateGraph(CardGameState)
 
-    # Nodo 1: El generador de cartas
-    # Llama al método del agente para generar una única carta y actualizar el estado.
-    def generate_card_node(state: CardGameState) -> dict:
-        print(f"--- ATTEMPTING TO GENERATE CARD ---")
-        return card_agent.generate_card(state)
+    # Nodo 1: Genera un lote de cartas
+    def generate_cards_batch_node(state: CardGameState) -> dict:
+        current = len(state.cards) if state.cards else 0
+        total = state.concept.number_of_unique_cards if state.concept else 0
+        remaining = total - current
+        batch = min(CARD_BATCH_SIZE, remaining)
+        print(f"--- GENERATING BATCH OF {batch} CARDS ---")
+        return card_agent.generate_cards_batch(state)
 
-    workflow.add_node("generate_card", generate_card_node)
+    workflow.add_node("generate_batch", generate_cards_batch_node)
 
-    # Nodo 2: El nodo que comprueba el progreso y actúa como ancla del bucle
+    # Nodo 2: Comprueba el progreso
     def check_completion_node(state: CardGameState) -> dict:
-        """Este nodo comprueba el progreso y lo muestra en la terminal."""
         current_cards_count = len(state.cards) if state.cards else 0
         total_unique_cards = state.concept.number_of_unique_cards if state.concept else 0
-        
         print(f"--- CARD PROGRESS: {current_cards_count} / {total_unique_cards} generated ---")
         return {}
-    
+
     workflow.add_node("check_completion", check_completion_node)
 
-    # El punto de entrada es el nodo de comprobación
     workflow.set_entry_point("check_completion")
 
-    # Desde la comprobación, decidimos si generar o terminar
     workflow.add_conditional_edges(
         "check_completion",
         should_continue,
         {
-            "generate_cards": "generate_card",
+            "generate_cards": "generate_batch",
             END: END
         }
     )
 
-    # Después de generar una carta, volvemos a la comprobación para el siguiente ciclo
-    workflow.add_edge("generate_card", "check_completion")
+    workflow.add_edge("generate_batch", "check_completion")
 
-    return workflow.compile(checkpointer=MemorySaver())
+    return workflow.compile(checkpointer=create_checkpointer())
 
 
 def create_image_generation_workflow(llm_service: LLMService) -> StateGraph:
@@ -172,4 +173,4 @@ def create_image_generation_workflow(llm_service: LLMService) -> StateGraph:
     workflow = StateGraph(CardGameState)
     workflow.add_node("generate_images", image_agent.generate_images)
     workflow.set_entry_point("generate_images")
-    return workflow.compile(checkpointer=MemorySaver())
+    return workflow.compile(checkpointer=create_checkpointer())
