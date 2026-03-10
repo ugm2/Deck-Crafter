@@ -7,13 +7,20 @@ from deck_crafter.services.llm_service import LLMService
 
 class ConceptGenerationAgent:
     DEFAULT_PROMPT = """
-    You are a world-class card game designer.
+    You are a world-class card game designer and art director.
     Create a concept for a unique and engaging card game based on the following user preferences.
 
     CRITIQUE TO ADDRESS: An expert reviewed your previous attempt. You MUST address these points.
     Critique: {critique}
 
     User preferences: {user_preferences}
+
+    IMPORTANT: Define a distinctive and cohesive art_style that will be used for ALL card illustrations.
+    The art_style should:
+    - Match the game's theme and tone
+    - Be specific enough to ensure visual consistency across all cards
+    - Include details about: color palette, rendering style, lighting, and mood
+    - Example: "Dark gothic oil painting with deep purples and blacks, dramatic chiaroscuro lighting, detailed textures"
 
     Ensure the game concept aligns with the preferences provided.
     """
