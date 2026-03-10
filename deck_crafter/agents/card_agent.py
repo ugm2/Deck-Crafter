@@ -1,35 +1,82 @@
 from typing import Optional, Dict, List
 from deck_crafter.models.game_concept import GameConcept, CardType
-from deck_crafter.models.card import Card
+from deck_crafter.models.card import Card, CardBatch
 from deck_crafter.models.state import CardGameState
 from deck_crafter.services.llm_service import LLMService
 from langchain_core.prompts import ChatPromptTemplate
+
+CARD_BATCH_SIZE = 5
 
 
 class CardGenerationAgent:
     DEFAULT_PROMPT = ChatPromptTemplate.from_template(
         """
-        You are a world-class card game designer.
-        Based on the game concept and existing cards, generate the full details for the next card.
+        You are a game balance expert designing cards for strategic depth.
 
-        CRITIQUE TO ADDRESS: Your last attempt to generate this card was flawed. You MUST address the following points.
-        Critique: {critique}
+        ### ⚠️ MANDATORY CRITIQUE - TOP PRIORITY ⚠️ ###
+        READ THIS FIRST. These issues MUST be fixed in your card design:
 
-        Game Concept:
-        {game_concept}
+        {critique}
 
-        Current number of cards generated: {current_num_cards}
-        Total number of unique cards to generate: {total_unique_cards}
+        ---
 
-        List of existing cards:
-        {existing_cards}
+        If critique mentions specific stats (attack, defense, cost), use those EXACT values.
+        If critique says "NERF card X", make that card type weaker than before.
+        If critique says "BUFF card X", make that card type stronger.
+        If critique mentions "overpowered", reduce stats by at least 30%.
+        If critique mentions "underpowered", increase stats by at least 30%.
 
-        Next card to generate should be of type: {next_card_type}
-        Card Type Description: {card_type_description}
-        Quantity for this card: {quantity}
+        ### BALANCE CONSTRAINTS ###
+        - Attack values: 1-8 range (avoid extreme outliers)
+        - Defense values: 1-10 range
+        - Costs: Must scale with power level (powerful = expensive)
+        - Effects: Should have clear counterplay options
 
-        Ensure the new card fits into the overall game strategy, interacts well with existing cards, matches the game's complexity level, and aligns with the game concept.
-        All textual fields (name, description, flavor_text, interactions) should be in '{language}'.
+        ### GAME CONTEXT ###
+        Game Concept: {game_concept}
+        Cards generated so far: {current_num_cards}/{total_unique_cards}
+        Existing cards: {existing_cards}
+
+        ### CARD TO GENERATE (SINGLE CARD ONLY) ###
+        Generate exactly ONE card with these properties:
+        - Type: {next_card_type}
+        - Description: {card_type_description}
+        - Quantity field should be: {quantity} (copies of this card in the deck)
+
+        ### REQUIREMENTS ###
+        - Output a SINGLE card object, NOT an array
+        - Card must complement existing cards without power creep
+        - Include strategic tradeoffs (high attack = low defense, strong effect = high cost)
+        - Language: '{language}'
+        """
+    )
+
+    BATCH_PROMPT = ChatPromptTemplate.from_template(
+        """
+        You are a game balance expert designing cards for strategic depth.
+
+        ### BALANCE CONSTRAINTS ###
+        - Attack values: 1-8 range (avoid extreme outliers)
+        - Defense values: 1-10 range
+        - Costs: Must scale with power level (powerful = expensive)
+        - Effects: Should have clear counterplay options
+
+        ### GAME CONTEXT ###
+        Game Concept: {game_concept}
+        Cards generated so far: {current_num_cards}/{total_unique_cards}
+        Existing cards: {existing_cards}
+
+        ### CARDS TO GENERATE (BATCH OF {batch_size}) ###
+        Generate exactly {batch_size} unique cards with these specifications:
+
+        {cards_to_generate}
+
+        ### REQUIREMENTS ###
+        - Output a JSON object with a "cards" array containing exactly {batch_size} cards
+        - Each card must have a unique name
+        - Cards must complement existing cards without power creep
+        - Include strategic tradeoffs (high attack = low defense, strong effect = high cost)
+        - Language: '{language}'
         """
     )
 
@@ -176,4 +223,73 @@ class CardGenerationAgent:
             return result
         else:
             return None  # Handle the failure case appropriately
+
+    def generate_cards_batch(self, state: CardGameState) -> dict:
+        """Generate multiple cards in a single LLM call for efficiency."""
+        game_concept: GameConcept = state.concept
+        if state.cards is None:
+            state.cards = []
+        existing_cards: List[Card] = state.cards
+
+        remaining = game_concept.number_of_unique_cards - len(existing_cards)
+        if remaining <= 0:
+            return {}
+
+        # Collect card specs for the batch
+        cards_specs = []
+        temp_existing = list(existing_cards)
+
+        for _ in range(min(CARD_BATCH_SIZE, remaining)):
+            next_card_type = self._determine_next_card_type(game_concept, temp_existing)
+            if not next_card_type:
+                break
+
+            num_generated = self._get_num_cards_generated_for_type(next_card_type, temp_existing)
+            next_card = self._get_next_card_to_generate(next_card_type, num_generated, temp_existing)
+
+            cards_specs.append({
+                "type": next_card_type.name,
+                "description": next_card_type.description,
+                "quantity": next_card.quantity,
+            })
+
+            # Track placeholder for next iteration
+            temp_existing.append(Card(
+                name=f"placeholder_{len(temp_existing)}",
+                type=next_card_type.name,
+                quantity=next_card.quantity,
+                description="",
+                image_description=""
+            ))
+
+        if not cards_specs:
+            return {}
+
+        # Format specs for prompt
+        specs_text = "\n".join([
+            f"{i+1}. Type: {spec['type']}, Description: {spec['description']}, Quantity: {spec['quantity']}"
+            for i, spec in enumerate(cards_specs)
+        ])
+
+        context = {
+            "game_concept": game_concept.model_dump(),
+            "current_num_cards": len(existing_cards),
+            "total_unique_cards": game_concept.number_of_unique_cards,
+            "existing_cards": [card.model_dump() for card in existing_cards],
+            "batch_size": len(cards_specs),
+            "cards_to_generate": specs_text,
+            "language": game_concept.language,
+        }
+
+        result = self.llm_service.generate(
+            output_model=CardBatch,
+            prompt=self.BATCH_PROMPT,
+            **context
+        )
+
+        if result and result.cards:
+            existing_cards.extend(result.cards)
+            return {"cards": existing_cards}
+
+        return {}
 
