@@ -1,17 +1,18 @@
-from typing import Dict, Type
+from typing import Type
 from deck_crafter.services.llm_service import LLMService
 from deck_crafter.models.game_concept import GameConcept
 from deck_crafter.models.rules import Rules
 from deck_crafter.models.card import Card
 from deck_crafter.models.evaluation import (
     BalanceEvaluation,
-    CoherenceEvaluation,
     ClarityEvaluation,
-    OriginalityEvaluation,
     PlayabilityEvaluation,
+    ThemeAlignmentEvaluation,
+    InnovationEvaluation,
     GameEvaluation,
-    FidelityEvaluation,
+    EvaluationSummary,
     ValidationResult,
+    calculate_weighted_score,
 )
 from deck_crafter.models.user_preferences import UserPreferences
 from pydantic import BaseModel
@@ -33,17 +34,17 @@ class BalanceAgent:
     7.  **Adjustment Suggestions (Nerfs & Buffs):** Propose concrete, numerical changes to improve balance. For example: "Change the cost of 'Spell X' from 3 to 5" or "Reduce the damage of 'Attack Y' from 10 to 7".
 
     ### SCORING RUBRIC (BALANCE) ###
-    Use this 1-10 scale with extreme rigor:
-    - **10 (Flawless Balance):** The holy grail. Multiple top-tier strategies are viable. A rich and diverse metagame that rewards skill.
-    - **9 (Exceptional):** Near-perfect. Perhaps one strategy is marginally superior, but the difference is minimal and requires immense skill to exploit.
-    - **8 (Very Good):** Well-tuned. A handful of competitive archetypes exist with clear counter-strategies.
-    - **7 (Good):** Solid. The game is clearly functional and balanced, but there might be some "auto-include" or clearly suboptimal cards.
-    - **6 (Acceptable):** Playable, but the metagame is narrow. There are obvious "correct" cards and many "trap" or useless choices.
-    - **5 (Mediocre):** A significant portion of the card pool is not viable. One or two strategies are clearly superior to the rest.
-    - **4 (Poor):** The game is heavily skewed. Following a specific strategy provides a massive, unfair advantage.
-    - **3 (Severely Unbalanced):** A single strategy or a small set of cards completely dominates the game.
-    - **2 (Broken):** Contains easily discoverable near-infinite combos or "I win" buttons.
-    - **1 (Catastrophic Failure):** The core math of the game is fundamentally broken. Unplayable from a competitive standpoint.
+    Use this 1-10 scale with granular sub-levels for refinement tracking:
+    - **10 (Flawless Balance):** The holy grail. Multiple top-tier strategies are viable. Rich, diverse metagame.
+    - **9 (Exceptional):** Near-perfect. One strategy marginally superior but requires immense skill to exploit.
+    - **8-8.5 (Very Good):** Well-tuned. Handful of competitive archetypes with clear counter-strategies.
+    - **7-7.9 (Good):** Solid and functional. Some "auto-include" cards but overall fair.
+    - **6.5-6.9 (Near-Good):** Close to solid. Most issues identified, 1-2 problem cards remain.
+    - **6-6.4 (Acceptable):** Playable but narrow metagame. Obvious "correct" and "trap" choices.
+    - **5-5.9 (Mediocre):** Significant card pool unviable. 1-2 superior strategies dominate.
+    - **4 (Poor):** Heavily skewed. One strategy provides massive, unfair advantage.
+    - **3 (Severely Unbalanced):** Single strategy or small card set dominates completely.
+    - **1-2 (Broken):** Near-infinite combos, "I win" buttons, or fundamentally broken math.
 
     ### INPUT DATA ###
     Game Concept: {concept}
@@ -66,35 +67,53 @@ class BalanceAgent:
             language=language,
         )
 
-class CoherenceAgent:
-    """Evaluates exclusively the game's thematic and mechanical coherence."""
+class ThemeAlignmentAgent:
+    """
+    Evaluates how well the game fulfills its intended vision.
+    Merges two perspectives:
+    - Coherence: Do mechanics match the theme?
+    - Fidelity: Does the game match the user's original request?
+    """
     PROMPT_TEMPLATE = """
     ### ROLE & PERSONA ###
-    Act as a demanding and purist Narrative Director, famous for creating deeply immersive game worlds. Your philosophy is that every single element, from the smallest rule to a card's flavor text, must serve and reinforce the central theme. You have zero tolerance for anything that breaks immersion or feels generic and out of place. For you, "the theme is law."
+    You are a demanding Creative Director and QA Lead combined. You care about TWO things equally:
+    1. **Internal Coherence**: Does every element reinforce the theme? Mechanics should feel like natural extensions of the world, not generic systems with a "skin."
+    2. **External Fidelity**: Does this game deliver what the user asked for? Every specification in the original request is a contract.
 
     ### TASK & PROCESS ###
-    Your sole mission is to provide a ruthless critique of this game's coherence. Follow these steps:
-    1.  **Concept vs. Mechanics Analysis:** Compare the general `GameConcept` with the `Rules` and `Cards`. Do the gameplay mechanics (drawing cards, using resources, win conditions) reinforce the fantasy of the concept, or do they feel like generic mechanics with a thematic "skin"?
-    2.  **Card Coherence Analysis:** Review the cards one by one. Do the name, art description, and, most importantly, the card's EFFECT make sense for its role in the game's universe? (Example of incoherence: A card named "Peaceful Farmer" having the ability "Deal 5 damage").
-    3.  **Overall Immersion Evaluation:** As a whole, does the game succeed in creating a believable atmosphere? Or are there elements that constantly remind you that you're just playing a game, breaking the "magic"?
-    4.  **Score Assignment:** Use the rubric below with maximum rigor to assign a score.
-    5.  **Analysis Write-up:** Write a detailed analysis justifying your score, citing specific examples of rules or cards that are particularly good or bad in terms of coherence.
-    6.  **Improvement Suggestions:** Propose concrete changes to strengthen the thematic links. For example: "Change the ability of 'Peacemaker Droid' from 'Deal 5 damage' to 'Cancel an opponent's action' to be more consistent with its name."
+    Evaluate this game's Theme Alignment by analyzing BOTH coherence AND fidelity:
 
-    ### SCORING RUBRIC (COHERENCE) ###
-    Use this 1-10 scale with extreme rigor:
-    - **10 (Perfect Symbiosis):** The game transcends its components. The theme and mechanics are indistinguishable, creating a purely immersive experience.
-    - **9 (Exceptional):** A masterclass in integration. Every card and rule feels like a natural extension of the game's world.
-    - **8 (Very Good):** The theme and mechanics are tightly interwoven. The world feels alive, consistent, and believable.
-    - **7 (Good):** The theme is well-integrated and clearly enhances the gameplay experience. Most elements feel right.
-    - **6 (Acceptable):** The theme is consistently applied, but it often feels like a superficial "skin" over standard mechanics.
-    - **5 (Mediocre):** The theme is present, but there are several noticeable moments where the mechanics contradict it, breaking immersion.
-    - **4 (Poor):** The theme and mechanics frequently clash. Many cards or rules feel completely out of place.
-    - **3 (Severely Disjointed):** The theme feels like a cheap coat of paint slapped onto a generic mechanical skeleton.
-    - **2 (Chaotic):** A theme is mentioned, but almost nothing in the gameplay supports or reflects it.
-    - **1 (Thematic Anarchy):** Total chaos. The elements feel completely random and disconnected from the stated theme.
+    **COHERENCE ANALYSIS:**
+    1. Compare the `GameConcept` with the `Rules` and `Cards`. Do mechanics reinforce the fantasy?
+    2. Review cards: Do names, art descriptions, and effects make sense in the game's universe?
+    3. Does the game create a believable, immersive atmosphere?
+
+    **FIDELITY ANALYSIS:**
+    4. Compare each field in `User Preferences` with the final output. Are all specifications met?
+    5. Does the game capture the essence of the user's `game_description`?
+    6. Identify any deviations from the original request.
+
+    **SYNTHESIS:**
+    7. Assign a SINGLE score that balances both aspects. A thematically coherent game that ignores the user's request fails. A faithful but incoherent game also fails.
+    8. Write an analysis covering both coherence and fidelity.
+    9. Suggest improvements for BOTH aspects.
+
+    ### SCORING RUBRIC (THEME ALIGNMENT) ###
+    Use this 1-10 scale with granular sub-levels:
+    - **10 (Perfect Vision):** Flawless coherence AND perfect adherence to user request. A rare masterpiece.
+    - **9 (Exceptional):** Near-perfect on both fronts. Minor, negligible deviations.
+    - **8-8.5 (Very Good):** Strong coherence and fidelity. World feels alive, request is satisfied.
+    - **7-7.9 (Good):** Well-integrated theme, most user requirements met. 1-2 minor issues.
+    - **6.5-6.9 (Near-Good):** Solid foundation, some gaps in either coherence or fidelity.
+    - **6-6.4 (Acceptable):** Theme feels like a "skin" OR some user specs are missed. Needs work.
+    - **5-5.9 (Mediocre):** Multiple coherence breaks OR significant fidelity issues.
+    - **4 (Poor):** Frequent theme-mechanic clashes AND major deviations from request.
+    - **3 (Severely Misaligned):** Little thematic sense AND bears little resemblance to request.
+    - **1-2 (Failure):** Total incoherence AND complete misunderstanding of user's vision.
 
     ### INPUT DATA ###
+    User Request: {game_description}
+    User Preferences: {preferences}
     Game Concept: {concept}
     Game Rules: {rules}
     All Cards: {cards}
@@ -102,13 +121,23 @@ class CoherenceAgent:
     ### OUTPUT LANGUAGE ###
     Language for response: {language}
     """
+
     def __init__(self, llm_service: LLMService):
         self.llm_service = llm_service
 
-    def evaluate(self, concept: GameConcept, rules: Rules, cards: list[Card], language: str) -> CoherenceEvaluation:
+    def evaluate(
+        self,
+        preferences: UserPreferences,
+        concept: GameConcept,
+        rules: Rules,
+        cards: list[Card],
+        language: str
+    ) -> ThemeAlignmentEvaluation:
         return self.llm_service.generate(
-            output_model=CoherenceEvaluation,
+            output_model=ThemeAlignmentEvaluation,
             prompt=self.PROMPT_TEMPLATE,
+            game_description=preferences.game_description,
+            preferences=preferences.model_dump_json(indent=2),
             concept=concept.model_dump_json(indent=2),
             rules=rules.model_dump_json(indent=2),
             cards=[card.model_dump() for card in cards],
@@ -132,17 +161,17 @@ class ClarityAgent:
     7.  **Improvement Suggestions:** Propose concrete rewrites for the problematic text. Suggest adding a Glossary for keywords or an FAQ for complex interactions.
 
     ### SCORING RUBRIC (CLARITY) ###
-    Use this 1-10 scale with extreme rigor:
-    - **10 (Crystal Clear):** A masterpiece of technical writing. So clear, concise, and well-structured that it's impossible to misinterpret. It anticipates all edge cases.
-    - **9 (Exceptional):** A gold-standard rulebook. Perfectly clear, with helpful examples for complex interactions.
-    - **8 (Very Good):** The text is clear and concise. Most player questions are anticipated and answered within the text.
-    - **7 (Good):** The rules are well-written and easy to follow for the most part. Only minor clarifications are needed for rare situations.
-    - **6 (Acceptable):** Mostly clear, but a few key interactions or rules require a second read or a group consensus/FAQ to resolve.
-    - **5 (Mediocre):** The core rules are understandable, but many edge cases are not covered, and several terms are used ambiguously. Leads to frequent pauses to debate rules.
-    - **4 (Poor):** The game is learnable, but players will argue about fundamental rule interpretations constantly. The text is vague and confusing.
-    - **3 (Severely Unclear):** Key rules are missing or so poorly written they are almost unusable. Requires players to invent "house rules" to function.
-    - **2 (Contradictory):** The rulebook contains rules that directly contradict each other.
-    - **1 (Unintelligible):** Complete gibberish. It's impossible to learn how to play the game from reading this text.
+    Use this 1-10 scale with granular sub-levels for refinement tracking:
+    - **10 (Crystal Clear):** Masterpiece of technical writing. Impossible to misinterpret. All edge cases anticipated.
+    - **9 (Exceptional):** Gold-standard rulebook. Perfectly clear with helpful examples.
+    - **8-8.5 (Very Good):** Clear and concise. Most player questions anticipated and answered.
+    - **7-7.9 (Good):** Well-written and easy to follow. Only minor clarifications needed for rare situations.
+    - **6.5-6.9 (Near-Good):** Almost there. Most rules clear, 1-2 interactions need FAQ.
+    - **6-6.4 (Acceptable):** Mostly clear, but some key interactions require second read or consensus.
+    - **5-5.9 (Mediocre):** Core rules understandable but many edge cases uncovered. Frequent rule debates.
+    - **4 (Poor):** Learnable but players argue about fundamental interpretations constantly.
+    - **3 (Severely Unclear):** Key rules missing or unusable. Requires "house rules."
+    - **1-2 (Contradictory/Unintelligible):** Rules contradict or impossible to understand.
 
     ### INPUT DATA ###
     Game Concept: {concept}
@@ -165,7 +194,7 @@ class ClarityAgent:
             language=language,
         )
 
-class OriginalityAgent:
+class InnovationAgent:
     """Evaluates the game's originality and innovation."""
     PROMPT_TEMPLATE = """
     ### ROLE & PERSONA ###
@@ -180,18 +209,18 @@ class OriginalityAgent:
     5.  **Analysis Write-up:** Justify your score with specific comparisons. If the game is derivative, name the existing games or mechanics it borrows from. If it is original, explain exactly which idea or interaction is new.
     6.  **Improvement Suggestions:** Propose concrete, creative ideas to increase novelty. Suggest adding a unique resource, a surprising win condition, a new form of player interaction, or a twist on a core mechanic.
 
-    ### SCORING RUBRIC (ORIGINALITY) ###
-    Use this 1-10 scale with extreme rigor:
-    - **10 (Groundbreaking):** A genre-defining masterpiece. Introduces mechanics or concepts that will be copied for years to come.
-    - **9 (Exceptional):** Truly novel. Pushes the boundaries of its genre with a unique and well-executed core idea.
-    - **8 (Very Good):** Innovative. Features several clever mechanics or a very fresh take on a genre that makes it feel distinct.
-    - **7 (Good):** Fresh. Has at least one core mechanic or a combination of ideas that feels new and interesting.
-    - **6 (Acceptable):** Contains a minor, interesting twist, but the core gameplay is largely conventional.
-    - **5 (Mediocre):** A formulaic combination of well-worn tropes and mechanics. A "by-the-numbers" design.
-    - **4 (Familiar):** Competently executed, but brings nothing new to the table. You feel like you've played this exact game before with a different theme.
-    - **3 (Highly Derivative):** Borrows heavily and obviously from one or two popular games.
-    - **2 (Re-skin):** Essentially a direct copy of an existing game with only the theme changed.
-    - **1 (Blatant Clone):** A shameless, near-verbatim copy of a well-known game.
+    ### SCORING RUBRIC (INNOVATION) ###
+    Use this 1-10 scale with granular sub-levels:
+    - **10 (Groundbreaking):** A genre-defining masterpiece. Introduces mechanics that will be copied for years.
+    - **9 (Exceptional):** Truly novel. Pushes boundaries with a unique, well-executed core idea.
+    - **8-8.5 (Very Good):** Innovative. Several clever mechanics or a fresh genre take.
+    - **7-7.9 (Good):** Fresh. At least one core mechanic feels new and interesting.
+    - **6.5-6.9 (Near-Good):** Some interesting ideas emerging, needs more development.
+    - **6-6.4 (Acceptable):** Minor interesting twist, but core gameplay is conventional.
+    - **5-5.9 (Mediocre):** Formulaic combination of well-worn tropes. "By-the-numbers" design.
+    - **4 (Familiar):** Competent but nothing new. Feels like you've played this before.
+    - **3 (Highly Derivative):** Borrows heavily from one or two popular games.
+    - **1-2 (Clone):** Direct copy with only theme changed.
 
     ### INPUT DATA ###
     Game Concept: {concept}
@@ -201,18 +230,23 @@ class OriginalityAgent:
     ### OUTPUT LANGUAGE ###
     Language for response: {language}
     """
+
     def __init__(self, llm_service: LLMService):
         self.llm_service = llm_service
 
-    def evaluate(self, concept: GameConcept, rules: Rules, cards: list[Card], language: str) -> OriginalityEvaluation:
+    def evaluate(self, concept: GameConcept, rules: Rules, cards: list[Card], language: str) -> InnovationEvaluation:
         return self.llm_service.generate(
-            output_model=OriginalityEvaluation,
+            output_model=InnovationEvaluation,
             prompt=self.PROMPT_TEMPLATE,
             concept=concept.model_dump_json(indent=2),
             rules=rules.model_dump_json(indent=2),
             cards=[card.model_dump() for card in cards],
             language=language,
         )
+
+
+# Legacy alias for backward compatibility
+OriginalityAgent = InnovationAgent
 
 class PlayabilityAgent:
     """Evaluates the game's playability, game flow, and fun factor."""
@@ -231,17 +265,17 @@ class PlayabilityAgent:
     7.  **Improvement Suggestions:** Propose concrete changes to inject more fun. Suggest adding more dramatic "swing" cards, creating more direct player interaction, improving the sense of progression, or adding elements of risk/reward.
 
     ### SCORING RUBRIC (PLAYABILITY / FUN FACTOR) ###
-    Use this 1-10 scale with extreme rigor:
-    - **10 (Masterpiece of Fun):** The pinnacle of interactive entertainment. A perfect "fun engine" that is intensely addictive and creates memorable stories in every session.
-    - **9 (Exceptional):** Incredibly fun and compelling. Deeply engaging with near-infinite replayability. You can't wait for your next game.
-    - **8 (Very Good):** A highly engaging game with deep, interesting decisions and excellent game flow. Very high replayability.
-    - **7 (Good):** Genuinely fun and solid. The game loop is satisfying, and you would happily recommend it and play it again.
-    - **6 (Acceptable):** Offers moments of fun, but these are hampered by flaws in pacing, a lack of decision depth, or repetitive gameplay. Might get boring after a few plays.
-    - **5 (Mediocre):** It's functional, but not particularly exciting or memorable. The decisions feel trivial, and the experience is largely "flat." You wouldn't ask to play it again.
-    - **4 (Poor):** The game is functional but the experience is hollow, unrewarding, or frustrating. The pacing is off.
-    - **3 (Boring):** The game loop is a flat line with no interesting decisions or moments of excitement.
-    - **2 (Frustrating):** The gameplay is actively frustrating, confusing, or feels like a pointless exercise.
-    - **1 (A Tedious Chore):** Actively anti-fun. Playing the game feels like work.
+    Use this 1-10 scale with granular sub-levels for refinement tracking:
+    - **10 (Masterpiece of Fun):** Pinnacle of interactive entertainment. Perfect "fun engine" with memorable stories.
+    - **9 (Exceptional):** Incredibly fun and compelling. Deep engagement, near-infinite replayability.
+    - **8-8.5 (Very Good):** Highly engaging with deep decisions and excellent flow. Very replayable.
+    - **7-7.9 (Good):** Genuinely fun and solid. Satisfying loop, would recommend and replay.
+    - **6.5-6.9 (Near-Good):** Getting fun. Core loop works, some pacing or depth issues remain.
+    - **6-6.4 (Acceptable):** Moments of fun hampered by pacing/depth flaws. Might bore after few plays.
+    - **5-5.9 (Mediocre):** Functional but not exciting. Trivial decisions, flat experience.
+    - **4 (Poor):** Hollow, unrewarding, or frustrating. Bad pacing.
+    - **3 (Boring):** Flat line. No interesting decisions or excitement.
+    - **1-2 (Anti-fun):** Frustrating, confusing, or tedious. Feels like work.
 
     ### INPUT DATA ###
     Game Concept: {concept}
@@ -265,121 +299,229 @@ class PlayabilityAgent:
         )
 
 class EvaluationSynthesizerAgent:
-    """Combina los informes de los especialistas en una evaluación final."""
+    """Combines specialist reports into a final evaluation with weighted scoring."""
     PROMPT_TEMPLATE = """
     ### ROLE & PERSONA ###
-    Act as the Executive Producer and Lead Designer of a major game studio. You have just received the final evaluation reports from your specialist teams (Balance, Coherence, Clarity, Originality, Playability, and Fidelity). Your job is to synthesize these expert opinions into a final, high-level executive summary and a clear verdict. You are making the final "go/no-go" recommendation for this project.
+    Act as the Executive Producer and Lead Designer of a major game studio. You have just received the final evaluation reports from your specialist teams. Your job is to synthesize these expert opinions into a final, high-level executive summary.
 
-    ### TASK & PROCESS ###
-    Your task is to generate the final, consolidated `GameEvaluation`. Follow these steps:
-    1.  **Internalize the Reports:** Read and understand all the provided specialist reports.
-    2.  **Structure the Executive Summary:** Write a balanced, insightful executive summary that must include:
-        - An opening statement with the overall verdict.
-        - The game's greatest strength (citing the highest-scoring report).
-        - The game's most critical weakness (citing the lowest-scoring report).
-        - A concluding sentence on the game's overall potential.
-    3.  **Assemble the Final Object:** Use the provided reports and the pre-calculated `overall_score` to assemble the final `GameEvaluation` object. Do NOT recalculate the score; use the one provided.
+    ### TASK ###
+    Write an executive summary (3-5 sentences) that includes:
+    1. An opening statement with the overall verdict based on the weighted score ({overall_score:.1f}/10).
+    2. The game's greatest strength (cite the highest-scoring metric).
+    3. The game's most critical weakness (cite the lowest-scoring metric).
+    4. A concluding sentence on the game's overall potential.
 
-    ### PRE-CALCULATED OVERALL SCORE ###
-    Overall Score: {overall_score:.2f}/10
-
-    ### SPECIALIST REPORTS ###
-    - Balance Report: {balance_report}
-    - Coherence Report: {coherence_report}
-    - Clarity Report: {clarity_report}
-    - Originality Report: {originality_report}
-    - Playability Report: {playability_report}
-    - Fidelity Report: {fidelity_report}
+    ### SPECIALIST SCORES (weighted importance shown) ###
+    - Playability: {playability_score}/10 (weight: 2.0 - most important)
+    - Balance: {balance_score}/10 (weight: 1.5)
+    - Clarity: {clarity_score}/10 (weight: 1.2)
+    - Theme Alignment: {theme_alignment_score}/10 (weight: 1.0)
+    - Innovation: {innovation_score}/10 (weight: 0.8 - nice to have)
 
     ### OUTPUT LANGUAGE ###
-    Language for the summary: {language}
+    Write the summary in: {language}
     """
+
     def __init__(self, llm_service: LLMService):
         self.llm_service = llm_service
 
     def synthesize(
         self,
         balance_eval: BalanceEvaluation,
-        coherence_eval: CoherenceEvaluation,
         clarity_eval: ClarityEvaluation,
-        originality_eval: OriginalityEvaluation,
         playability_eval: PlayabilityEvaluation,
-        fidelity_eval: FidelityEvaluation,
+        theme_alignment_eval: ThemeAlignmentEvaluation,
+        innovation_eval: InnovationEvaluation,
         language: str,
     ) -> GameEvaluation:
-        scores = [
-            balance_eval.score,
-            coherence_eval.score,
-            clarity_eval.score,
-            originality_eval.score,
-            playability_eval.score,
-            fidelity_eval.score,
-        ]
-        overall_score = sum(scores) / len(scores)
+        # Use final_score (adjusted if available, otherwise original) for weighted calculation
+        scores = {
+            "balance": balance_eval.final_score,
+            "clarity": clarity_eval.final_score,
+            "playability": playability_eval.final_score,
+            "theme_alignment": theme_alignment_eval.final_score,
+            "innovation": innovation_eval.final_score,
+        }
+        overall_score = calculate_weighted_score(scores)
 
-        return self.llm_service.generate(
-            output_model=GameEvaluation,
+        # Generate only the summary using LLM (show adjusted scores)
+        summary_result = self.llm_service.generate(
+            output_model=EvaluationSummary,
             prompt=self.PROMPT_TEMPLATE,
-            balance_report=balance_eval,
-            coherence_report=coherence_eval,
-            clarity_report=clarity_eval,
-            originality_report=originality_eval,
-            playability_report=playability_eval,
-            fidelity_report=fidelity_eval,
+            balance_score=round(balance_eval.final_score, 1),
+            clarity_score=round(clarity_eval.final_score, 1),
+            playability_score=round(playability_eval.final_score, 1),
+            theme_alignment_score=round(theme_alignment_eval.final_score, 1),
+            innovation_score=round(innovation_eval.final_score, 1),
             overall_score=overall_score,
             language=language,
         )
 
-class FidelityAgent:
-    """Evalúa exclusivamente la fidelidad del juego generado con respecto a la petición inicial del usuario."""
+        return GameEvaluation(
+            overall_score=overall_score,
+            summary=summary_result.summary,
+            balance=balance_eval,
+            clarity=clarity_eval,
+            playability=playability_eval,
+            theme_alignment=theme_alignment_eval,
+            innovation=innovation_eval,
+        )
+
+# Legacy aliases for backward compatibility
+CoherenceAgent = ThemeAlignmentAgent
+FidelityAgent = ThemeAlignmentAgent
+
+
+class SuggestionSynthesizerAgent:
+    """
+    Synthesizes suggestions from all evaluation metrics.
+    Deduplicates, prioritizes by impact, and identifies conflicts.
+    """
     PROMPT_TEMPLATE = """
-    ### ROLE & PERSONA ###
-    Act as a meticulous Project Manager and Quality Assurance lead. Your primary responsibility is to ensure that the final product strictly adheres to the initial client specifications. You are not concerned with whether the game is fun or balanced in the abstract, but only with whether it fulfills every single point of the user's request. A deviation from the request is a failure.
+    ### ROLE ###
+    You are a Game Design Project Manager synthesizing feedback from multiple specialist evaluators.
+    Your job is to consolidate their suggestions into a prioritized, non-redundant action plan.
 
-    ### TASK & PROCESS ###
-    Your sole mission is to provide a rigorous audit of the game's fidelity to the user's original preferences. Follow these steps meticulously:
-    1.  **Direct Comparison:** For each field in the `User Preferences` (language, theme, game_style, number_of_players, target_audience, rule_complexity), compare the requested value with the corresponding value in the final `Game Concept`.
-    2.  **Description Analysis:** Read the initial `game_description` and compare its core ideas and sentiment with the final `Game Concept` description and `Rules`. Did the system capture the essence of what the user asked for?
-    3.  **Identify Deviations:** Explicitly point out any discrepancies. For example: "User requested 'simple' complexity, but the generated rules include three different resource types and a multi-phase turn structure, which corresponds to 'medium' or 'complex' complexity." or "User requested a 'sci-fi' theme, but the generated cards include 'dragons' and 'magic spells'."
-    4.  **Score Assignment:** Based on the degree of adherence and the rubric below, assign a numerical score. Be extremely literal in your judgment.
-    5.  **Analysis Write-up:** Write a detailed analysis justifying your score, citing specific examples of successful adherence and failures to meet the requirements.
-    6.  **Improvement Suggestions:** Propose concrete changes to the generated concept or rules to better align them with the original user request.
+    ### RAW SUGGESTIONS FROM EVALUATORS ###
+    {all_suggestions}
 
-    ### SCORING RUBRIC (FIDELITY) ###
-    Use this 1-10 scale with extreme rigor:
-    - **10 (Perfect Adherence):** The output is a perfect reflection of the user's request in every aspect.
-    - **9 (Exceptional):** Minor, almost negligible deviations in interpretation, but the core spirit and all key requirements are met.
-    - **8 (Very Good):** All major requirements are met. There might be small discrepancies in secondary aspects.
-    - **7 (Good):** The game is clearly based on the user's request, but one or two key aspects deviate noticeably.
-    - **6 (Acceptable):** The output is recognizable, but there are significant deviations that alter the feel of the requested game.
-    - **5 (Mediocre):** The system seems to have ignored several key preferences, resulting in a game that is only tangentially related to the request.
-    - **4 (Poor):** Major, fundamental aspects of the request (like theme or complexity) were incorrectly generated.
-    - **3 (Severely Deviant):** The output bears little resemblance to the initial request.
-    - **2 (Incorrect):** The system appears to have completely misunderstood or ignored the core of the user's prompt.
-    - **1 (Total Failure):** The generated game is the opposite of or completely unrelated to what was requested.
+    ### YOUR TASK ###
+    1. **Deduplicate**: Merge similar suggestions (e.g., "nerf Dragon" and "reduce Dragon attack" are the same)
+    2. **Prioritize**: Rank by estimated impact on overall score
+    3. **Identify Conflicts**: Flag suggestions that contradict (e.g., "buff X" vs "nerf X")
+    4. **Categorize**: Group into high/medium/low priority
 
-    ### INPUT DATA ###
-    User Prompt: {game_description}
-    User Preferences: {preferences}
-    Game Concept: {concept}
-    Game Rules: {rules}
+    ### PRIORITIZATION RULES ###
+    - HIGH: Affects Playability or Balance (highest weighted metrics), estimated impact > 0.5
+    - MEDIUM: Affects Clarity or Theme Alignment, or high-weighted with lower impact
+    - LOW: Affects Innovation, or minor tweaks
+
+    ### OUTPUT FORMAT ###
+    For each suggestion:
+    - suggestion: The actionable text (merged if duplicated)
+    - target: "rules", "cards", or "both"
+    - target_card: Specific card name if applicable
+    - estimated_impact: Expected score improvement (0-2.0)
+    - priority: "high", "medium", or "low"
+    - source_metrics: Which evaluators suggested this
+    - conflicts_with: IDs of conflicting suggestions (empty if none)
 
     ### OUTPUT LANGUAGE ###
     Language for response: {language}
     """
+
     def __init__(self, llm_service: LLMService):
         self.llm_service = llm_service
 
-    def evaluate(self, preferences: UserPreferences, concept: GameConcept, rules: Rules, language: str) -> FidelityEvaluation:
+    def synthesize(
+        self,
+        evaluation: GameEvaluation,
+        language: str = "English"
+    ) -> "SynthesizedSuggestions":
+        from deck_crafter.models.evaluation import SynthesizedSuggestions
+
+        # Collect all suggestions from all metrics
+        all_suggestions = []
+        metrics = [
+            ("Playability", evaluation.playability),
+            ("Balance", evaluation.balance),
+            ("Clarity", evaluation.clarity),
+            ("Theme Alignment", evaluation.theme_alignment),
+            ("Innovation", evaluation.innovation),
+        ]
+
+        for metric_name, metric_eval in metrics:
+            if metric_eval.suggestions:
+                for suggestion in metric_eval.suggestions:
+                    all_suggestions.append(f"[{metric_name}] {suggestion}")
+
+        if not all_suggestions:
+            return SynthesizedSuggestions(
+                total_suggestions=0,
+                deduplicated_count=0,
+            )
+
+        # Format for prompt
+        suggestions_text = "\n".join(f"{i+1}. {s}" for i, s in enumerate(all_suggestions))
+
         return self.llm_service.generate(
-            output_model=FidelityEvaluation,
+            output_model=SynthesizedSuggestions,
             prompt=self.PROMPT_TEMPLATE,
-            game_description=preferences.game_description,
-            preferences=preferences.model_dump_json(indent=2),
-            concept=concept.model_dump_json(indent=2),
-            rules=rules.model_dump_json(indent=2),
+            all_suggestions=suggestions_text,
             language=language,
         )
+
+
+class CrossMetricReviewAgent:
+    """
+    Second-pass review agent that adjusts scores based on cross-metric awareness.
+    Each metric can see other metrics' scores and adjust its own by ±0.5.
+    """
+    PROMPT_TEMPLATE = """
+    ### ROLE ###
+    You are conducting a SECOND-PASS review of an evaluation. You originally scored {metric_name} as {original_score}/10.
+    Now you can see how OTHER metrics scored the same game. Consider whether your score should be adjusted.
+
+    ### YOUR ORIGINAL EVALUATION ###
+    Metric: {metric_name}
+    Original Score: {original_score}/10
+    Your Analysis: {original_analysis}
+
+    ### OTHER METRICS' SCORES ###
+    {other_scores_summary}
+
+    ### CROSS-METRIC CONSIDERATIONS ###
+    Sometimes metrics interact:
+    - A game with poor Balance (low score) but high Playability might still be fun despite imbalance
+    - A game with great Innovation but poor Clarity might not deliver on its promise
+    - Theme Alignment issues might be forgiven if Playability is excellent
+    - Perfect Clarity doesn't matter if the game isn't fun (low Playability)
+
+    ### YOUR TASK ###
+    1. Review your original score in light of the other metrics
+    2. Decide if an adjustment is warranted (±0.5 MAX)
+    3. Only adjust if there's a genuine cross-metric interaction
+    4. If no adjustment needed, set adjusted_score = original_score
+
+    ### ADJUSTMENT RULES ###
+    - Maximum adjustment: ±0.5 points
+    - Only adjust for genuine cross-metric interactions
+    - Don't adjust just because other scores are different
+    - Justify any adjustment with specific reasoning
+
+    ### OUTPUT LANGUAGE ###
+    Language for response: {language}
+    """
+
+    def __init__(self, llm_service: LLMService):
+        self.llm_service = llm_service
+
+    def review(
+        self,
+        metric_name: str,
+        original_eval: "BaseMetricEvaluation",
+        all_scores: dict[str, int],
+        language: str = "English"
+    ) -> "ScoreAdjustment":
+        from deck_crafter.models.evaluation import ScoreAdjustment
+
+        # Format other scores
+        other_scores = {k: v for k, v in all_scores.items() if k != metric_name}
+        other_scores_summary = "\n".join([
+            f"- {name.replace('_', ' ').title()}: {score}/10"
+            for name, score in sorted(other_scores.items(), key=lambda x: -x[1])
+        ])
+
+        return self.llm_service.generate(
+            output_model=ScoreAdjustment,
+            prompt=self.PROMPT_TEMPLATE,
+            metric_name=metric_name.replace('_', ' ').title(),
+            original_score=original_eval.score,
+            original_analysis=original_eval.analysis[:500],  # Truncate for context
+            other_scores_summary=other_scores_summary,
+            language=language,
+        )
+
 
 class ValidatorAgent:
     """
