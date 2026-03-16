@@ -1,5 +1,10 @@
-from typing import Optional, List
+from typing import Optional, List, Literal
 from pydantic import BaseModel, Field
+
+
+# Effect types that can be simulated
+EffectType = Literal["none", "draw", "damage", "heal", "gain_points", "gain_resource", "win_game"]
+EffectTarget = Literal["self", "opponent", "any"]
 
 
 class Card(BaseModel):
@@ -88,6 +93,32 @@ class Card(BaseModel):
         description=(
             "Base64 encoded image data for the card (**optional**). "
             "Used to store the card's visual representation."
+        ),
+    )
+
+    # Structured effect fields for simulation (optional but recommended)
+    effect_type: Optional[EffectType] = Field(
+        None,
+        description=(
+            "The primary mechanical effect of the card for simulation (**optional but recommended**). "
+            "Must be one of: 'none', 'draw', 'damage', 'heal', 'gain_points', 'gain_resource', 'win_game'. "
+            "Examples: A card that says 'Deal 3 damage' should have effect_type='damage'. "
+            "A card that says 'Gain 2 points' should have effect_type='gain_points'."
+        ),
+    )
+    effect_value: Optional[int] = Field(
+        None,
+        description=(
+            "The numeric value for the effect (**optional but recommended when effect_type is set**). "
+            "Examples: 'Draw 2 cards' = 2, 'Deal 5 damage' = 5, 'Gain 3 points' = 3."
+        ),
+    )
+    effect_target: Optional[EffectTarget] = Field(
+        None,
+        description=(
+            "Who the effect targets (**optional, defaults to 'self'**). "
+            "Must be one of: 'self' (affects the player), 'opponent' (affects enemy), 'any' (player chooses). "
+            "Examples: Damage usually targets 'opponent', healing usually targets 'self'."
         ),
     )
 
