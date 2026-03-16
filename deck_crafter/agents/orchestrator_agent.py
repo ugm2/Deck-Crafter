@@ -10,6 +10,49 @@ from deck_crafter.services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 
+REFINEMENT_PROMPT = """You are an expert game designer improving a card game through targeted edits.
+You receive the current game state, evaluation scores, and a history of what worked and failed.
+Your job is to plan concrete actions that will improve the game's weakest areas.
+
+## Available Actions
+
+| intent | params | description |
+|--------|--------|-------------|
+| edit_card | card_name, field, value | Change a card's field (name, description, cost, quantity, effect_type, effect_value, rarity, type) |
+| edit_rule | section, value | Change a rules section (turn_structure, win_conditions, resource_mechanics, deck_preparation, initial_hands, turn_limit, scoring_system, additional_rules, glossary) |
+| add_card | description | Generate a new card from a natural language description |
+| remove_card | card_name | Remove a card from the game |
+| regenerate_cards | filter, instruction | Regenerate cards matching filter (e.g. type, rarity) with instruction |
+| regenerate_rules | section, instruction | Rewrite a rules section with instruction |
+
+## Current Game State
+
+{state_summary}
+
+## Evaluation Results
+
+{evaluation_details}
+
+## Refinement Memory
+
+{refinement_memory}
+
+## Instructions
+
+Analyze the evaluation and plan targeted actions to improve the game.
+
+RULES:
+- Focus on the weakest metrics first (weighted by importance: playability 2.0, balance 1.5, clarity 1.2, theme_alignment 1.0, innovation 0.8)
+- Make SMALL, SURGICAL changes. Do not overhaul everything at once.
+- If a metric is blocked (ceiling detected), skip it and target something else.
+- NEVER repeat a failed pattern from the refinement memory.
+- Each edit_card action changes ONE field. Use multiple actions for multiple fields.
+- Prefer edit_card/edit_rule over regenerate_cards/regenerate_rules — targeted fixes beat rewrites.
+- If evaluation suggestions mention specific cards or rules, address those directly.
+- Set response_language to match the game's language.
+- Set understanding to explain your reasoning: what you're targeting and why.
+"""
+
 ORCHESTRATOR_PROMPT = """You are the game editing assistant for Deck-Crafter.
 You receive a user message about a card game and must decide what actions to take.
 
@@ -461,10 +504,14 @@ Match the game's language and theme."""
 
         # Simulation
         try:
-            sim_result = run_simulation_for_game(state, num_games=num_sim_games)
-            if sim_result:
-                state.simulation_report = sim_result.report
-                state.simulation_analysis = sim_result.analysis
+            game_name = state.concept.title if state.concept else "Game"
+            report, warnings = run_simulation_for_game(
+                rules=state.rules, cards=state.cards,
+                game_name=game_name, num_games=num_sim_games,
+            )
+            if report:
+                state.simulation_report = report
+                state.compilation_warnings = warnings or []
         except Exception as e:
             logger.warning(f"[Orchestrator] Simulation failed: {e}")
 
@@ -717,3 +764,224 @@ Match the game's language and theme."""
             return "\n".join(lines)
 
         return "No evaluation data available. Run an evaluation first."
+
+    # === Chat-driven refinement loop ===
+
+    def run_refinement_loop(
+        self,
+        state: CardGameState,
+        eval_workflow,
+        num_iterations: int = 5,
+        num_sim_games: int = 30,
+        on_iteration=None,
+        save_state=None,
+    ) -> CardGameState:
+        """Run a chat-driven refinement loop.
+
+        Each iteration: plan edits → execute → evaluate → compare → keep or rollback.
+
+        Args:
+            state: Current game state (must have evaluation).
+            eval_workflow: Panel evaluation workflow.
+            num_iterations: Max iterations to run.
+            num_sim_games: Number of simulation games per evaluation.
+            on_iteration: Optional callback(iteration, state, score_before, score_after, actions, kept).
+        """
+        from deck_crafter.models.state import RefinementMemory
+
+        if not state.refinement_memory:
+            state.refinement_memory = RefinementMemory()
+        memory = state.refinement_memory
+
+        for i in range(1, num_iterations + 1):
+            iteration_num = state.evaluation_iteration + 1
+            score_before = state.evaluation.overall_score if state.evaluation else 0.0
+
+            logger.info(f"[Refinement] === Iteration {iteration_num} (loop {i}/{num_iterations}) | Score: {score_before:.2f} ===")
+
+            # 1. Build refinement prompt
+            plan = self._plan_refinement(state, memory)
+            if not plan.actions:
+                logger.warning(f"[Refinement] No actions planned, stopping.")
+                if on_iteration:
+                    on_iteration(iteration_num, state, score_before, score_before, [], True)
+                break
+
+            logger.info(f"[Refinement] Plan: {plan.understanding}")
+            logger.info(f"[Refinement] Actions: {[a.intent for a in plan.actions]}")
+
+            # 2. Snapshot before changes
+            snapshot = state.model_dump_json()
+
+            # 3. Execute actions
+            actions = []
+            for planned in plan.actions:
+                action, new_state, changed = self._execute_action(planned, state, eval_workflow, num_sim_games)
+                actions.append(action)
+                if changed:
+                    state = new_state
+
+            # 4. Evaluate
+            eval_action, state = self._run_evaluation(state, eval_workflow, num_sim_games)
+            actions.append(eval_action)
+            score_after = state.evaluation.overall_score if state.evaluation else 0.0
+
+            # 5. Compare & decide
+            delta = score_after - score_before
+            kept = delta >= -0.1  # Keep if improved or within tolerance
+
+            if kept:
+                state.evaluation_iteration = iteration_num
+                if delta > 0.05:
+                    # Record success
+                    memory.consecutive_rollbacks = 0
+                    memory.record_success("overall", score_after, iteration_num)
+                    memory.successful_patterns.append(
+                        f"Iteration {iteration_num}: {plan.understanding} | {score_before:.2f} → {score_after:.2f}"
+                    )
+                    logger.info(f"[Refinement] KEPT (improved): {score_before:.2f} → {score_after:.2f} (+{delta:.2f})")
+                else:
+                    logger.info(f"[Refinement] KEPT (within tolerance): {score_before:.2f} → {score_after:.2f} ({delta:+.2f})")
+
+                # Update best score
+                if state.best_score_achieved is None or score_after > state.best_score_achieved:
+                    state.best_score_achieved = score_after
+            else:
+                # Rollback
+                state = CardGameState.model_validate_json(snapshot)
+                memory.consecutive_rollbacks += 1
+                memory.total_failed_iterations += 1
+                memory.lessons_learned.append(
+                    f"Iteration {iteration_num}: REVERTED ({score_before:.2f} → {score_after:.2f}). "
+                    f"Plan was: {plan.understanding}"
+                )
+                memory.failed_pattern_strings.append(
+                    f"FAILED iteration {iteration_num}: {plan.understanding} | "
+                    f"Actions: {', '.join(a.intent for a in actions)} | "
+                    f"{score_before:.2f} → {score_after:.2f}"
+                )
+                logger.warning(f"[Refinement] REVERTED: {score_before:.2f} → {score_after:.2f} ({delta:+.2f})")
+
+            state.refinement_memory = memory
+
+            if on_iteration:
+                on_iteration(iteration_num, state, score_before, score_after if kept else score_before, actions, kept)
+
+            # Save after every iteration
+            if save_state:
+                try:
+                    save_state(state)
+                except Exception as e:
+                    logger.warning(f"[Refinement] Failed to save state: {e}")
+
+        return state
+
+    def _plan_refinement(self, state: CardGameState, memory: "RefinementMemory") -> ActionPlan:
+        """Build a refinement-specific prompt and get an action plan."""
+        summary = self._build_state_summary(state)
+        eval_details = self._build_evaluation_details(state)
+        memory_text = self._format_refinement_memory(memory)
+
+        prompt = REFINEMENT_PROMPT.format(
+            state_summary=summary,
+            evaluation_details=eval_details,
+            refinement_memory=memory_text,
+        )
+
+        result = self.llm.generate(ActionPlan, prompt)
+        if result is None:
+            return ActionPlan(understanding="Failed to generate refinement plan", actions=[])
+        return result
+
+    def _build_evaluation_details(self, state: CardGameState) -> str:
+        """Build detailed evaluation text for the refinement prompt."""
+        if not state.evaluation:
+            return "No evaluation available."
+
+        ev = state.evaluation
+        lines = [f"Overall score: {ev.overall_score:.2f}"]
+        weights = {"playability": 2.0, "balance": 1.5, "clarity": 1.2, "theme_alignment": 1.0, "innovation": 0.8}
+
+        for metric in ["playability", "balance", "clarity", "theme_alignment", "innovation"]:
+            m = getattr(ev, metric, None)
+            if not m:
+                continue
+            score = m.score if hasattr(m, "score") else "?"
+            weight = weights.get(metric, 1.0)
+            lines.append(f"\n### {metric} ({score}/10, weight: {weight})")
+            if hasattr(m, "analysis") and m.analysis:
+                lines.append(f"Analysis: {m.analysis[:500]}")
+            if hasattr(m, "suggestions") and m.suggestions:
+                for s in m.suggestions[:3]:
+                    lines.append(f"  - {s}")
+
+        if ev.summary:
+            lines.append(f"\nSummary: {ev.summary[:300]}")
+
+        # Simulation data
+        if state.simulation_report:
+            sr = state.simulation_report
+            lines.append(f"\nSimulation: {sr.completion_rate*100:.0f}% completion, avg {sr.avg_turns:.0f} turns")
+            if sr.issues:
+                for issue in sr.issues[:5]:
+                    lines.append(f"  Issue: {issue}")
+
+        return "\n".join(lines)
+
+    def _format_refinement_memory(self, memory: "RefinementMemory") -> str:
+        """Format the RefinementMemory object as text for the prompt."""
+        lines = []
+
+        # Score history from experiments
+        if memory.experiments:
+            lines.append("## Score History")
+            for exp in memory.experiments[-10:]:  # Last 10
+                result = ""
+                if exp.score_after is not None:
+                    delta = exp.score_after - exp.score_before
+                    confirmed = "confirmed" if exp.hypothesis_confirmed else "rejected"
+                    result = f" → {exp.score_after:.2f} ({delta:+.2f}, {confirmed})"
+                lines.append(
+                    f"  Iter {exp.iteration}: {exp.score_before:.2f}{result} "
+                    f"| target={exp.target_metric}, type={exp.intervention_type}"
+                )
+
+        # Failed patterns — critical to avoid repeating
+        if memory.failed_pattern_strings:
+            lines.append("\n## FAILED PATTERNS (do NOT repeat)")
+            for fp in memory.failed_pattern_strings[-10:]:
+                lines.append(f"  - {fp}")
+
+        # Successful patterns
+        if memory.successful_patterns:
+            lines.append("\n## Successful Patterns (these worked)")
+            for sp in memory.successful_patterns[-5:]:
+                lines.append(f"  - {sp}")
+
+        # Blocked metrics
+        blocked = memory.get_blocked_metrics()
+        if blocked:
+            lines.append(f"\n## BLOCKED METRICS (ceiling detected): {', '.join(blocked)}")
+            lines.append("Do not target these metrics — focus on others.")
+
+        # Lessons learned
+        if memory.lessons_learned:
+            lines.append("\n## Lessons Learned")
+            for lesson in memory.lessons_learned[-5:]:
+                lines.append(f"  - {lesson}")
+
+        # Problematic cards
+        if memory.problematic_cards:
+            prob = sorted(memory.problematic_cards.items(), key=lambda x: -x[1])[:5]
+            lines.append("\n## Problematic Cards (flagged multiple times)")
+            for card, count in prob:
+                lines.append(f"  - {card}: flagged {count} times")
+
+        # Stats
+        lines.append(f"\nTotal failed iterations: {memory.total_failed_iterations}")
+        lines.append(f"Consecutive rollbacks: {memory.consecutive_rollbacks}")
+
+        if not lines:
+            return "No refinement history yet. This is the first iteration."
+
+        return "\n".join(lines)

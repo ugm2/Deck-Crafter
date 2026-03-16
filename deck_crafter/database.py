@@ -282,6 +282,41 @@ async def get_all_card_images(game_id: str) -> Dict[str, bytes]:
         rows = await cursor.fetchall()
         return {row[0]: row[1] for row in rows}
 
+def save_game_state_sync(state: CardGameState) -> None:
+    """Save a game state to the database synchronously (for use in sync refinement loops)."""
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        conn.execute("""
+            INSERT OR REPLACE INTO games
+            (game_id, status, preferences, concept, rules, cards, evaluation,
+             evaluation_iteration, max_evaluation_iterations, evaluation_threshold,
+             previous_evaluations, refinement_memory, simulation_analysis, simulation_report,
+             chat_history, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            state.game_id,
+            state.status.value if hasattr(state.status, 'value') else state.status,
+            state.preferences.model_dump_json(),
+            state.concept.model_dump_json() if state.concept else None,
+            state.rules.model_dump_json() if state.rules else None,
+            json.dumps([card.model_dump() for card in state.cards]) if state.cards else None,
+            state.evaluation.model_dump_json() if state.evaluation else None,
+            state.evaluation_iteration,
+            state.max_evaluation_iterations,
+            state.evaluation_threshold,
+            json.dumps([e.model_dump() for e in state.previous_evaluations]) if state.previous_evaluations else None,
+            state.refinement_memory.model_dump_json() if state.refinement_memory else None,
+            state.simulation_analysis.model_dump_json() if state.simulation_analysis else None,
+            state.simulation_report.model_dump_json() if state.simulation_report else None,
+            json.dumps([m.model_dump(mode="json") for m in state.chat_history]) if state.chat_history else None,
+            state.created_at.isoformat(),
+            state.updated_at.isoformat()
+        ))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def save_card_image_sync(game_id: str, card_name: str, image_data: bytes) -> None:
     """Save a card image to the database synchronously."""
     conn = sqlite3.connect(DB_PATH)

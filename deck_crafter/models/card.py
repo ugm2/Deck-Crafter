@@ -1,5 +1,5 @@
 from typing import Optional, List, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # Effect types that can be simulated
@@ -113,6 +113,19 @@ class Card(BaseModel):
             "Examples: 'Draw 2 cards' = 2, 'Deal 5 damage' = 5, 'Gain 3 points' = 3."
         ),
     )
+
+    @field_validator("effect_value", mode="before")
+    @classmethod
+    def coerce_effect_value(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, int):
+            return v
+        if isinstance(v, str):
+            import re
+            m = re.match(r"[-+]?\d+", v.strip())
+            return int(m.group()) if m else None
+        return None
     effect_target: Optional[EffectTarget] = Field(
         None,
         description=(

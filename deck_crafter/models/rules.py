@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 class TurnPhase(BaseModel):
     """
@@ -47,6 +47,13 @@ class Rules(BaseModel):
         None,
         description="A dictionary of game-specific keywords and their precise definitions. Key: Term, Value: Definition. Essential for clarity."
     )
+
+    @field_validator("glossary", mode="before")
+    @classmethod
+    def coerce_glossary(cls, v):
+        if isinstance(v, str):
+            return None
+        return v
 
     examples_of_play: Optional[List[str]] = Field(
         None,

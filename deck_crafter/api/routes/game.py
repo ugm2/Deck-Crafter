@@ -25,7 +25,7 @@ from deck_crafter.utils.config import Config as LLMConfig
 from deck_crafter.models.state import CardGameState, GameStatus, RefinementMemory
 from deck_crafter.models.chat import ChatMessage, ChatAction
 from deck_crafter.utils.config import Config
-from deck_crafter.database import init_db, save_game_state as save_game_state_to_db, get_game_state as get_game_state_from_db, get_all_card_images
+from deck_crafter.database import init_db, save_game_state as save_game_state_to_db, save_game_state_sync, get_game_state as get_game_state_from_db, get_all_card_images
 
 # Simulation imports
 from deck_crafter.game_simulator.integration import run_simulation_for_game, analyze_game
@@ -1045,3 +1045,89 @@ async def get_chat_history(game_id: str):
         raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
     history = state.chat_history or []
     return [m.model_dump() for m in history]
+
+
+class ChatRefinementRequest(BaseModel):
+    num_iterations: int = 5
+    num_simulation_games: int = 30
+
+
+class ChatRefinementIterationResult(BaseModel):
+    iteration: int
+    score_before: float
+    score_after: float
+    kept: bool
+    actions: list[dict]
+
+
+class ChatRefinementResponse(BaseModel):
+    initial_score: float
+    final_score: float
+    iterations_run: int
+    results: list[ChatRefinementIterationResult]
+    game_state_summary: dict | None = None
+
+
+@router.post("/{game_id}/chat/refine", response_model=ChatRefinementResponse)
+async def chat_refine_game(game_id: str, request: ChatRefinementRequest):
+    """Run chat-driven refinement loop: orchestrator plans edits, evaluates, keeps or rolls back."""
+    state = await get_game_state_from_db(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+
+    if not state.evaluation:
+        raise HTTPException(status_code=400, detail="Game must have an evaluation before refinement")
+
+    orchestrator = _get_orchestrator(game_id)
+    eval_workflow = _panel_eval or standard_workflows.get("evaluation")
+
+    if not eval_workflow:
+        raise HTTPException(status_code=500, detail="No evaluation workflow available")
+
+    initial_score = state.evaluation.overall_score
+    if state.baseline_score is None:
+        state.baseline_score = initial_score
+
+    iteration_results: list[ChatRefinementIterationResult] = []
+
+    def on_iteration(iteration, _state, score_before, score_after, actions, kept):
+        iteration_results.append(ChatRefinementIterationResult(
+            iteration=iteration,
+            score_before=score_before,
+            score_after=score_after,
+            kept=kept,
+            actions=[a.model_dump() for a in actions],
+        ))
+
+    def save_state_cb(s):
+        s.updated_at = datetime.now(timezone.utc)
+        save_game_state_sync(s)
+
+    state = orchestrator.run_refinement_loop(
+        state=state,
+        eval_workflow=eval_workflow,
+        num_iterations=request.num_iterations,
+        num_sim_games=request.num_simulation_games,
+        on_iteration=on_iteration,
+        save_state=save_state_cb,
+    )
+
+    # Save
+    state.updated_at = datetime.now(timezone.utc)
+    await save_game_state_to_db(state)
+
+    final_score = state.evaluation.overall_score if state.evaluation else initial_score
+    summary = {
+        "title": state.concept.title if state.concept else None,
+        "score": final_score,
+        "card_count": len(state.cards) if state.cards else 0,
+        "iteration": state.evaluation_iteration,
+    }
+
+    return ChatRefinementResponse(
+        initial_score=initial_score,
+        final_score=final_score,
+        iterations_run=len(iteration_results),
+        results=iteration_results,
+        game_state_summary=summary,
+    )
