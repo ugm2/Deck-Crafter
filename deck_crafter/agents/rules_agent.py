@@ -1,3 +1,4 @@
+import logging
 from typing import Optional, Dict, List
 from pydantic import BaseModel, Field
 from deck_crafter.models.game_concept import GameConcept
@@ -7,6 +8,8 @@ from deck_crafter.services.llm_service import LLMService
 
 
 from deck_crafter.models.rules import TurnPhase
+
+logger = logging.getLogger(__name__)
 
 
 class SectionRewrite(BaseModel):
@@ -81,12 +84,28 @@ class RuleGenerationAgent:
     4. **Concrete Examples**: Provide play examples for complex interactions
     5. **Balance Constraints**: Include limits on actions per turn, hand sizes, resource caps
 
-    ### BALANCE REQUIREMENTS ###
-    Every rulebook MUST include:
-    - Maximum cards playable per turn (default: 2)
-    - Maximum hand size (default: 7)
-    - Turn time limit or turn counter for game length
-    - Clear resource generation/spending limits
+    ### BALANCE REQUIREMENTS — USE THESE PROVEN PATTERNS ###
+    Every rulebook MUST include resource constraints. Choose ONE pattern:
+
+    **PATTERN A — Simple Mana (recommended):**
+    - Players gain exactly 1 resource per turn (automatic)
+    - Card costs: 1-4 resources (nothing costs more than 4)
+    - Play cards until out of resources for the turn
+    - Unspent resources do NOT carry over
+    - Max hand size: 7
+
+    **PATTERN B — Card-as-Resource:**
+    - Any card can be discarded face-down as 1 resource
+    - Card costs: 1-3 resources
+    - Draw 2 cards per turn, play up to 2 cards per turn
+    - No separate resource pool
+
+    **PATTERN C — No Resources (combat-focused):**
+    - No resource system. Play 1-2 cards per turn (strict limit)
+    - Balance via card type restrictions (e.g., max 1 attack card per turn)
+
+    CRITICAL: Do NOT invent a novel resource system. Pick Pattern A, B, or C.
+    If the theme suggests a custom resource name (e.g., "Force Points"), just RENAME the resource — keep the MATH identical.
 
     ### TASK ###
     Generate a complete rulebook based on the Game Concept below.
@@ -119,8 +138,12 @@ class RuleGenerationAgent:
         :param state: The current state of the card game, including the game concept.
         :return: Updated state with the generated rules.
         """
+        logger.info(f"[RulesAgent] Generating rules for '{state.concept.title}'")
         game_concept: GameConcept = state.concept
         critique = state.critique
+
+        if critique:
+            logger.debug(f"[RulesAgent] With critique: {critique[:100]}...")
 
         context = {
             "game_concept": game_concept.model_dump(),
@@ -132,7 +155,10 @@ class RuleGenerationAgent:
         )
 
         if rules:
+            logger.info(f"[RulesAgent] Rules generated: {len(rules.turn_structure)} phases, "
+                       f"win condition: {rules.win_conditions[0] if rules.win_conditions else 'none'}")
             return {"rules": rules}
+        logger.warning("[RulesAgent] Failed to generate rules")
         return {}
 
     ENHANCE_PROMPT = """
@@ -176,7 +202,9 @@ class RuleGenerationAgent:
         Use this for 'tweak' or 'rewrite_section' rules_action.
         Use generate_rules() for 'overhaul' when you need a complete rewrite.
         """
+        logger.info("[RulesAgent] Enhancing rules (additive mode - glossary, examples, FAQ)")
         if not state.rules:
+            logger.warning("[RulesAgent] No existing rules, falling back to full generation")
             return self.generate_rules(state)
 
         existing_rules = state.rules
@@ -247,6 +275,16 @@ Additional Rules: {existing_rules.additional_rules or []}
                 phase_key = phase.phase_name.lower()
                 if phase_key in phase_clarifications:
                     phase.phase_description += f"\n\n{phase_clarifications[phase_key]}"
+
+        # Log what was added
+        added_items = []
+        if enhancement.new_glossary_entries:
+            added_items.append(f"{len(enhancement.new_glossary_entries)} glossary terms")
+        if enhancement.new_examples:
+            added_items.append(f"{len(enhancement.new_examples)} examples")
+        if enhancement.new_additional_rules:
+            added_items.append(f"{len(enhancement.new_additional_rules)} rules")
+        logger.info(f"[RulesAgent] Enhanced rules with: {', '.join(added_items) or 'minor clarifications'}")
 
         return {"rules": updated_rules}
 
@@ -347,7 +385,9 @@ Additional Rules: {existing_rules.additional_rules or []}
 
         Use this for 'rewrite_section' rules_action with a specific rules_target.
         """
+        logger.info(f"[RulesAgent] Rewriting section: {target_section}")
         if not state.rules:
+            logger.warning("[RulesAgent] No existing rules, falling back to full generation")
             return self.generate_rules(state)
 
         existing_rules = state.rules
@@ -361,7 +401,7 @@ Additional Rules: {existing_rules.additional_rules or []}
 
         # Validate section exists
         if target_section not in self.SECTION_FIELDS:
-            # Fall back to enhance if section not recognized
+            logger.warning(f"[RulesAgent] Unknown section '{target_section}', falling back to enhance")
             return self.enhance_rules(state)
 
         field_name = self.SECTION_FIELDS[target_section]
