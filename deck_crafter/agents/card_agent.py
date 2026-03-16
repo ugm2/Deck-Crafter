@@ -1,3 +1,4 @@
+import logging
 from typing import Optional, Dict, List
 from deck_crafter.models.game_concept import GameConcept, CardType
 from deck_crafter.models.card import Card, CardBatch
@@ -5,6 +6,7 @@ from deck_crafter.models.state import CardGameState
 from deck_crafter.services.llm_service import LLMService
 from langchain_core.prompts import ChatPromptTemplate
 
+logger = logging.getLogger(__name__)
 CARD_BATCH_SIZE = 5
 
 
@@ -17,6 +19,9 @@ class CardGenerationAgent:
         READ THIS FIRST. These issues MUST be fixed in your card design:
 
         {critique}
+
+        ### SIMULATION FEEDBACK (from actual gameplay testing) ###
+        {simulation_feedback}
 
         ---
 
@@ -31,6 +36,13 @@ class CardGenerationAgent:
         - Defense values: 1-10 range
         - Costs: Must scale with power level (powerful = expensive)
         - Effects: Should have clear counterplay options
+
+        ### RESOURCE NAMING (CRITICAL FOR SIMULATION) ###
+        The "cost" field MUST use standard resource names for simulation compatibility:
+        - Use "X Mana" for magical/fantasy resources (NOT Aether, Essence, Arcana, etc.)
+        - Use "X Energy" for physical/stamina resources
+        - Use "X Gold" for economic resources
+        - Example: "3 Mana" is correct, "3 Aether Points" is WRONG
 
         ### GAME CONTEXT ###
         Game Concept: {game_concept}
@@ -48,6 +60,18 @@ class CardGenerationAgent:
         - Card must complement existing cards without power creep
         - Include strategic tradeoffs (high attack = low defense, strong effect = high cost)
         - Language: '{language}'
+
+        ### STRUCTURED EFFECT FIELDS (IMPORTANT) ###
+        You MUST populate these simulation fields:
+        - effect_type: One of "none", "draw", "damage", "heal", "gain_points", "gain_resource", "win_game"
+        - effect_value: The numeric value (e.g., "Draw 2 cards" = 2, "Deal 3 damage" = 3)
+        - effect_target: "self" (affects you), "opponent" (affects enemy), or "any" (player chooses)
+
+        Examples:
+        - "Deal 3 damage to opponent" → effect_type="damage", effect_value=3, effect_target="opponent"
+        - "Draw 2 cards" → effect_type="draw", effect_value=2, effect_target="self"
+        - "Gain 2 points" → effect_type="gain_points", effect_value=2, effect_target="self"
+        - Passive/complex effects → effect_type="none", effect_value=0, effect_target="self"
         """
     )
 
@@ -55,11 +79,32 @@ class CardGenerationAgent:
         """
         You are a game balance expert designing cards for strategic depth.
 
+        ### ⚠️ MANDATORY CRITIQUE - TOP PRIORITY ⚠️ ###
+        READ THIS FIRST. These issues MUST be fixed in your card design:
+
+        {critique}
+
+        ### SIMULATION FEEDBACK (from actual gameplay testing) ###
+        {simulation_feedback}
+
+        ---
+
+        If critique mentions specific stats (attack, defense, cost), use those EXACT values.
+        If critique says "NERF card X", make that card type weaker than before.
+        If critique says "BUFF card X", make that card type stronger.
+
         ### BALANCE CONSTRAINTS ###
         - Attack values: 1-8 range (avoid extreme outliers)
         - Defense values: 1-10 range
         - Costs: Must scale with power level (powerful = expensive)
         - Effects: Should have clear counterplay options
+
+        ### RESOURCE NAMING (CRITICAL FOR SIMULATION) ###
+        The "cost" field MUST use standard resource names for simulation compatibility:
+        - Use "X Mana" for magical/fantasy resources (NOT Aether, Essence, Arcana, etc.)
+        - Use "X Energy" for physical/stamina resources
+        - Use "X Gold" for economic resources
+        - Example: "3 Mana" is correct, "3 Aether Points" is WRONG
 
         ### GAME CONTEXT ###
         Game Concept: {game_concept}
@@ -77,6 +122,19 @@ class CardGenerationAgent:
         - Cards must complement existing cards without power creep
         - Include strategic tradeoffs (high attack = low defense, strong effect = high cost)
         - Language: '{language}'
+
+        ### STRUCTURED EFFECT FIELDS (IMPORTANT) ###
+        For each card, you MUST populate these simulation fields:
+        - effect_type: One of "none", "draw", "damage", "heal", "gain_points", "gain_resource", "win_game"
+        - effect_value: The numeric value (e.g., "Draw 2 cards" = 2, "Deal 3 damage" = 3)
+        - effect_target: "self" (affects you), "opponent" (affects enemy), or "any" (player chooses)
+
+        Examples:
+        - "Deal 3 damage to opponent" → effect_type="damage", effect_value=3, effect_target="opponent"
+        - "Draw 2 cards" → effect_type="draw", effect_value=2, effect_target="self"
+        - "Gain 2 points" → effect_type="gain_points", effect_value=2, effect_target="self"
+        - "Heal 4 health" → effect_type="heal", effect_value=4, effect_target="self"
+        - Passive/complex effects → effect_type="none", effect_value=0, effect_target="self"
         """
     )
 
@@ -94,23 +152,30 @@ class CardGenerationAgent:
         critique = state.critique
 
         if len(existing_cards) >= game_concept.number_of_unique_cards:
+            logger.debug(f"[CardAgent] All cards generated ({len(existing_cards)}/{game_concept.number_of_unique_cards})")
             return {}
 
         next_card_type = self._determine_next_card_type(game_concept, existing_cards)
         if not next_card_type:
             return {}
 
+        logger.debug(f"[CardAgent] Generating card {len(existing_cards)+1}/{game_concept.number_of_unique_cards} "
+                    f"(type: {next_card_type.name})")
+
         num_cards_generated_for_type = self._get_num_cards_generated_for_type(next_card_type, existing_cards)
         next_card_to_generate_shell = self._get_next_card_to_generate(next_card_type, num_cards_generated_for_type, existing_cards)
-        
+
         context = self._prepare_context(game_concept, existing_cards, next_card_to_generate_shell, next_card_type)
         context["critique"] = critique or "First attempt, no critique yet."
-        
+        context["simulation_feedback"] = self._format_simulation_feedback(state)
+
         new_card = self._generate_new_card(context)
 
         if new_card:
+            logger.info(f"[CardAgent] Generated card: {new_card.name} ({new_card.type})")
             existing_cards.append(new_card)
             return {"cards": existing_cards}
+        logger.warning("[CardAgent] Failed to generate card")
         return {}
 
     def _get_num_cards_generated_for_type(
@@ -213,6 +278,58 @@ class CardGenerationAgent:
         }
         return context
 
+    def _format_simulation_feedback(self, state: CardGameState) -> str:
+        """Format simulation analysis as feedback for card generation."""
+        if not state.simulation_analysis:
+            return "No simulation data available yet."
+
+        analysis = state.simulation_analysis
+        lines = []
+
+        # Confidence warning
+        if analysis.confidence and analysis.confidence.overall == "low":
+            lines.append("⚠️ LOW CONFIDENCE: " + "; ".join(analysis.confidence.reasons))
+
+        # Exact balance adjustments (highest priority)
+        if analysis.balance_adjustments:
+            from game_simulator.models.metrics import BalanceAdjustment
+            parsed = BalanceAdjustment.parse_adjustments(analysis.balance_adjustments)
+            if parsed:
+                lines.append("⚡ EXACT STAT CHANGES REQUIRED (from simulation data):")
+                for adj in parsed:
+                    if adj.current_value and adj.target_value:
+                        lines.append(f"  - {adj.card_name}: {adj.stat} {adj.current_value} → {adj.target_value} ({adj.reason})")
+                    else:
+                        lines.append(f"  - {adj.card_name}: {adj.action} {adj.stat} ({adj.reason})")
+
+        # Problematic cards
+        if analysis.problematic_cards:
+            lines.append("\nPROBLEMATIC CARDS (from gameplay simulation):")
+            for pc in analysis.problematic_cards:
+                fix = f" - Suggested fix: {pc.suggested_fix}" if pc.suggested_fix else ""
+                lines.append(f"  - {pc.card_name}: {pc.issue_type.upper()} - {pc.evidence}{fix}")
+
+        # High priority fixes
+        if analysis.high_priority_fixes:
+            lines.append("\nHIGH PRIORITY FIXES:")
+            for fix in analysis.high_priority_fixes:
+                lines.append(f"  - {fix}")
+
+        # Balance insights
+        if analysis.pacing_assessment in ["poor", "needs_work"]:
+            lines.append(f"\nPACING ISSUE: {analysis.pacing_assessment}")
+            if analysis.pacing_issues:
+                for issue in analysis.pacing_issues:
+                    lines.append(f"  - {issue.issue} ({issue.severity})")
+
+        # Anti-fun indicators
+        if analysis.anti_fun_indicators:
+            lines.append("\nANTI-FUN PATTERNS DETECTED:")
+            for indicator in analysis.anti_fun_indicators:
+                lines.append(f"  - {indicator}")
+
+        return "\n".join(lines) if lines else "Simulation found no major issues."
+
     def _generate_new_card(self, context: Dict) -> Optional[Card]:
         result = self.llm_service.generate(
             output_model=Card,
@@ -233,7 +350,11 @@ class CardGenerationAgent:
 
         remaining = game_concept.number_of_unique_cards - len(existing_cards)
         if remaining <= 0:
+            logger.debug(f"[CardAgent] All cards generated ({len(existing_cards)} cards)")
             return {}
+
+        logger.info(f"[CardAgent] Generating batch of up to {min(CARD_BATCH_SIZE, remaining)} cards "
+                   f"({len(existing_cards)}/{game_concept.number_of_unique_cards} done)")
 
         # Collect card specs for the batch
         cards_specs = []
@@ -271,6 +392,7 @@ class CardGenerationAgent:
             for i, spec in enumerate(cards_specs)
         ])
 
+        critique = state.critique
         context = {
             "game_concept": game_concept.model_dump(),
             "current_num_cards": len(existing_cards),
@@ -279,6 +401,8 @@ class CardGenerationAgent:
             "batch_size": len(cards_specs),
             "cards_to_generate": specs_text,
             "language": game_concept.language,
+            "critique": critique or "First attempt, no critique yet.",
+            "simulation_feedback": self._format_simulation_feedback(state),
         }
 
         result = self.llm_service.generate(
@@ -288,8 +412,11 @@ class CardGenerationAgent:
         )
 
         if result and result.cards:
+            logger.info(f"[CardAgent] Batch generated {len(result.cards)} cards: "
+                       f"{[c.name for c in result.cards]}")
             existing_cards.extend(result.cards)
             return {"cards": existing_cards}
 
+        logger.warning("[CardAgent] Batch generation failed or returned no cards")
         return {}
 
