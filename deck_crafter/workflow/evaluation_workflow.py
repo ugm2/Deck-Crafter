@@ -1,7 +1,10 @@
+import logging
 from typing import TypedDict
 from langgraph.graph import StateGraph, END
 
 from deck_crafter.workflow.checkpointer import create_checkpointer
+
+logger = logging.getLogger(__name__)
 
 from deck_crafter.models.state import CardGameState, GameStatus
 from deck_crafter.models.evaluation import (
@@ -55,29 +58,59 @@ def create_multi_agent_evaluation_workflow(llm_service: LLMService) -> StateGrap
     # --- PASS 1: Parallel Evaluation Nodes ---
     def run_balance_eval(state: EvaluationState):
         game = state['game_state']
-        return {"balance_eval": balance_agent.evaluate(game.concept, game.rules, game.cards, game.concept.language)}
+        logger.info(f"[EvalWorkflow] Running BALANCE evaluation (has simulation: {game.simulation_analysis is not None})")
+        result = balance_agent.evaluate(
+            game.concept, game.rules, game.cards, game.concept.language,
+            simulation_analysis=game.simulation_analysis
+        )
+        logger.info(f"[EvalWorkflow] BALANCE score: {result.score:.2f}")
+        return {"balance_eval": result}
 
     def run_clarity_eval(state: EvaluationState):
         game = state['game_state']
-        return {"clarity_eval": clarity_agent.evaluate(game.concept, game.rules, game.cards, game.concept.language)}
+        logger.info(f"[EvalWorkflow] Running CLARITY evaluation (warnings: {len(game.compilation_warnings)})")
+        result = clarity_agent.evaluate(
+            game.concept, game.rules, game.cards, game.concept.language,
+            simulation_analysis=game.simulation_analysis,
+            compilation_warnings=game.compilation_warnings
+        )
+        logger.info(f"[EvalWorkflow] CLARITY score: {result.score:.2f}")
+        return {"clarity_eval": result}
 
     def run_playability_eval(state: EvaluationState):
         game = state['game_state']
-        return {"playability_eval": playability_agent.evaluate(game.concept, game.rules, game.cards, game.concept.language)}
+        logger.info(f"[EvalWorkflow] Running PLAYABILITY evaluation (has simulation: {game.simulation_analysis is not None})")
+        result = playability_agent.evaluate(
+            game.concept, game.rules, game.cards, game.concept.language,
+            simulation_analysis=game.simulation_analysis
+        )
+        logger.info(f"[EvalWorkflow] PLAYABILITY score: {result.score:.2f}")
+        return {"playability_eval": result}
 
     def run_theme_alignment_eval(state: EvaluationState):
         game = state['game_state']
-        return {"theme_alignment_eval": theme_alignment_agent.evaluate(
-            game.preferences, game.concept, game.rules, game.cards, game.concept.language
-        )}
+        logger.info(f"[EvalWorkflow] Running THEME_ALIGNMENT evaluation")
+        result = theme_alignment_agent.evaluate(
+            game.preferences, game.concept, game.rules, game.cards, game.concept.language,
+            simulation_analysis=game.simulation_analysis
+        )
+        logger.info(f"[EvalWorkflow] THEME_ALIGNMENT score: {result.score:.2f}")
+        return {"theme_alignment_eval": result}
 
     def run_innovation_eval(state: EvaluationState):
         game = state['game_state']
-        return {"innovation_eval": innovation_agent.evaluate(game.concept, game.rules, game.cards, game.concept.language)}
+        logger.info(f"[EvalWorkflow] Running INNOVATION evaluation")
+        result = innovation_agent.evaluate(
+            game.concept, game.rules, game.cards, game.concept.language,
+            simulation_analysis=game.simulation_analysis
+        )
+        logger.info(f"[EvalWorkflow] INNOVATION score: {result.score:.2f}")
+        return {"innovation_eval": result}
 
     # --- PASS 2: Cross-Metric Review Node ---
     def run_cross_metric_review(state: EvaluationState):
-        """Second pass: each metric sees others' scores and can adjust ±0.5"""
+        """Second pass: each metric sees others' scores and can adjust ±1.0"""
+        logger.info("[EvalWorkflow] Starting PASS 2: Cross-metric review")
         language = state['game_state'].concept.language
 
         # Collect all pass 1 scores
@@ -88,6 +121,7 @@ def create_multi_agent_evaluation_workflow(llm_service: LLMService) -> StateGrap
             "theme_alignment": state['theme_alignment_eval'].score,
             "innovation": state['innovation_eval'].score,
         }
+        logger.info(f"[EvalWorkflow] Pass 1 scores: {all_scores}")
 
         # Review each metric (run in sequence to avoid race conditions)
         metrics = [
@@ -106,13 +140,18 @@ def create_multi_agent_evaluation_workflow(llm_service: LLMService) -> StateGrap
                     all_scores=all_scores,
                     language=language,
                 )
-                # Apply adjustment (clamped to ±0.5)
+                # Apply adjustment (asymmetric: up to +1.0, down to -0.25 only)
                 delta = adjustment.adjusted_score - adjustment.original_score
-                clamped_delta = max(-0.5, min(0.5, delta))
+                clamped_delta = max(-0.25, min(1.0, delta))
                 eval_obj.adjusted_score = eval_obj.score + clamped_delta
                 eval_obj.adjustment_reason = adjustment.adjustment_reason
-            except Exception:
+                if abs(clamped_delta) > 0.01:
+                    logger.info(f"[EvalWorkflow] {metric_name.upper()} adjusted: "
+                               f"{eval_obj.score:.2f} → {eval_obj.adjusted_score:.2f} "
+                               f"({clamped_delta:+.2f}): {adjustment.adjustment_reason[:50]}...")
+            except Exception as e:
                 # If review fails, keep original score
+                logger.warning(f"[EvalWorkflow] Cross-metric review failed for {metric_name}: {e}")
                 eval_obj.adjusted_score = float(eval_obj.score)
                 eval_obj.adjustment_reason = "Review skipped"
 
@@ -126,6 +165,7 @@ def create_multi_agent_evaluation_workflow(llm_service: LLMService) -> StateGrap
 
     # --- Final Synthesis Node ---
     def run_synthesis(state: EvaluationState):
+        logger.info("[EvalWorkflow] Running final synthesis")
         language = state['game_state'].concept.language
 
         # First, create the evaluation
@@ -137,6 +177,7 @@ def create_multi_agent_evaluation_workflow(llm_service: LLMService) -> StateGrap
             innovation_eval=state['innovation_eval'],
             language=language,
         )
+        logger.info(f"[EvalWorkflow] Final weighted score: {final_evaluation.overall_score:.2f}")
 
         # Then, synthesize and deduplicate suggestions
         try:
@@ -145,13 +186,17 @@ def create_multi_agent_evaluation_workflow(llm_service: LLMService) -> StateGrap
                 language=language,
             )
             final_evaluation.synthesized_suggestions = synthesized
-        except Exception:
+            total = len(synthesized.high_priority) + len(synthesized.medium_priority) + len(synthesized.low_priority)
+            logger.info(f"[EvalWorkflow] Synthesized {total} suggestions (high: {len(synthesized.high_priority)}, "
+                       f"med: {len(synthesized.medium_priority)}, low: {len(synthesized.low_priority)})")
+        except Exception as e:
             # If synthesis fails, continue without it
-            pass
+            logger.warning(f"[EvalWorkflow] Suggestion synthesis failed: {e}")
 
         game_state = state['game_state']
         game_state.evaluation = final_evaluation
         game_state.status = GameStatus.EVALUATED
+        logger.info(f"[EvalWorkflow] Evaluation complete. Overall: {final_evaluation.overall_score:.2f}/10")
         return {"final_evaluation": final_evaluation, "game_state": game_state}
 
     # --- Assemble the Graph ---
