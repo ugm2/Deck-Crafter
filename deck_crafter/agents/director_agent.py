@@ -1,8 +1,11 @@
+import logging
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
 from deck_crafter.services.llm_service import LLMService
 from deck_crafter.models.evaluation import GameEvaluation
-from deck_crafter.models.state import RefinementMemory, RefinementExperiment
+from deck_crafter.models.state import RefinementMemory, RefinementExperiment, FailedPattern
+
+logger = logging.getLogger(__name__)
 
 
 class RefinementStrategy(BaseModel):
@@ -33,19 +36,20 @@ class RefinementStrategy(BaseModel):
     )
 
     # Intervention type
-    intervention_type: Literal["surgical", "moderate", "nuclear"] = Field(
+    intervention_type: Literal["nuclear", "moderate", "surgical"] = Field(
         ...,
-        description="surgical: 1-2 minimal changes to test one hypothesis. "
-                    "moderate: 3-5 coordinated changes. "
-                    "nuclear: significant redesign (ONLY if 2+ moderate attempts failed)."
+        description="nuclear: significant redesign (score < 3 or 2+ moderate failures). "
+                    "moderate: 3-5 coordinated changes (score 3-5). "
+                    "surgical: 1-2 minimal changes to test one hypothesis (score > 5)."
     )
 
     # Granular rules control
-    rules_action: Literal["none", "tweak", "rewrite_section", "overhaul"] = Field(
+    rules_action: Literal["overhaul", "rewrite_section", "tweak", "none"] = Field(
         ...,
-        description="none: don't touch rules. tweak: minor wording/number changes. "
+        description="overhaul: major rules restructure (nuclear interventions). "
                     "rewrite_section: rewrite one section (e.g., win_conditions). "
-                    "overhaul: major rules restructure (nuclear only)."
+                    "tweak: minor wording/number changes. "
+                    "none: don't touch rules."
     )
     rules_target: Optional[str] = Field(
         default=None,
@@ -60,11 +64,12 @@ class RefinementStrategy(BaseModel):
     )
 
     # Granular cards control
-    cards_action: Literal["none", "stat_adjust", "regenerate_few", "regenerate_many"] = Field(
+    cards_action: Literal["regenerate_many", "regenerate_few", "stat_adjust", "none"] = Field(
         ...,
-        description="none: don't touch cards. stat_adjust: tweak stats without regeneration. "
+        description="regenerate_many: regenerate 4+ cards (moderate/nuclear). "
                     "regenerate_few: regenerate 1-3 specific cards. "
-                    "regenerate_many: regenerate 4+ cards (moderate/nuclear only)."
+                    "stat_adjust: tweak stats without regeneration. "
+                    "none: don't touch cards."
     )
     cards_to_modify: List[str] = Field(
         default_factory=list,
@@ -157,8 +162,13 @@ Iteration: {iteration}/{max_iterations} ({remaining_iterations} remaining)
 
 ⚠️ IMPORTANT: If you see a failed pattern above with the same target_metric + rules_action + rules_target combination you're considering, you MUST choose a DIFFERENT approach. Repeating a failed pattern is FORBIDDEN.
 
+{blocked_metrics_section}
+{forced_intervention_section}
+
 ### PROBLEMATIC CARDS (RECURRING ISSUES) ###
 {problematic_cards}
+
+{simulation_section}
 
 ### YOUR TASK: DESIGN THE NEXT EXPERIMENT ###
 
@@ -192,15 +202,16 @@ Follow the SCIENTIFIC METHOD:
   3. Choose a DIFFERENT rules_target, OR
   4. Try cards_action instead of rules_action
 - Each experiment should test ONE main hypothesis
-- Surgical interventions first, escalate only when needed
 - Use EXACT card names from the list above
 - Be SPECIFIC with numbers and targets
 - After 2+ rollbacks: STOP targeting the same metric, try something else entirely
 
-### DECISION GUIDELINES ###
-- Score < 4: Consider moderate/nuclear intervention
-- Score 4-6: Surgical or moderate based on history
-- Score 6-7: Surgical only, fine-tuning
+### DECISION GUIDELINES (MANDATORY) ###
+- Score < 3.5: You MUST use intervention_type="nuclear". rules_action MUST be "overhaul". cards_action MUST be "regenerate_many". The game is fundamentally broken — tweaking will NOT fix it.
+- Score 3.5-5: You MUST use intervention_type="moderate" or "nuclear". rules_action MUST be "rewrite_section" or "overhaul". cards_action MUST NOT be "none".
+- Score 5-6.5: Moderate or surgical. Both rules AND cards likely need work.
+- Score 6.5-7: Surgical only, fine-tuning
+- If simulation completion < 10%: The game CANNOT BE PLAYED. rules_action MUST be "rewrite_section" or "overhaul" targeting the broken mechanic. This takes priority over all other guidelines.
 - Failed 2+ surgical: Escalate to moderate
 - Failed 2+ moderate: Escalate to nuclear
 - Just had rollback: Try COMPLETELY different approach:
@@ -256,10 +267,26 @@ If the experiment succeeded:
         cards_summary: str = "",
         memory: Optional[RefinementMemory] = None,
         previous_evaluations: Optional[List[GameEvaluation]] = None,
+        simulation_analysis=None,
+        forced_intervention: Optional[str] = None,
+        blocked_metrics: Optional[List[str]] = None,
     ) -> RefinementStrategy:
         """Design the next refinement experiment using scientific method."""
+        logger.info(f"[DirectorAgent] Designing experiment for iteration {iteration}/{max_iterations}")
+        logger.info(f"[DirectorAgent] Current score: {evaluation.overall_score:.2f}, threshold: {threshold}")
+
+        if forced_intervention:
+            logger.warning(f"[DirectorAgent] FORCED INTERVENTION: {forced_intervention.upper()}")
+        if blocked_metrics:
+            logger.info(f"[DirectorAgent] Blocked metrics (ceiling): {blocked_metrics}")
+        if memory:
+            logger.info(f"[DirectorAgent] Memory: {len(memory.failed_patterns)} failed patterns, "
+                       f"{len(memory.experiments)} experiments, "
+                       f"total failures: {memory.total_failed_iterations}")
+
         gap = threshold - evaluation.overall_score
         remaining = max_iterations - iteration
+        logger.debug(f"[DirectorAgent] Gap to close: {gap:.2f}, iterations remaining: {remaining}")
 
         # Build trend info
         trend_info = ""
@@ -275,7 +302,8 @@ If the experiment succeeded:
             experiment_history = self._format_experiments(memory.experiments[-5:])  # Last 5
             lessons_learned = "\n".join(f"- {l}" for l in memory.lessons_learned[-5:]) or "None yet"
             successful_patterns = "\n".join(f"- {p}" for p in memory.successful_patterns[-5:]) or "None yet"
-            failed_patterns = "\n".join(f"- {p}" for p in memory.failed_patterns[-5:]) or "None yet"
+            # Format structured FailedPattern objects
+            failed_patterns = self._format_failed_patterns(memory.failed_patterns[-5:])
             problematic_cards = "\n".join(
                 f"- {card}: failed {count} times"
                 for card, count in sorted(memory.problematic_cards.items(), key=lambda x: -x[1])[:5]
@@ -287,7 +315,90 @@ If the experiment succeeded:
             failed_patterns = "None yet"
             problematic_cards = "None identified"
 
-        return self.llm_service.generate(
+        # Build blocked metrics section
+        blocked_metrics_section = ""
+        if blocked_metrics:
+            blocked_metrics_section = f"""
+### ⛔ BLOCKED METRICS (DO NOT TARGET THESE) ###
+The following metrics have hit their improvement ceiling after multiple failed attempts:
+{chr(10).join(f'- {m}: HIT CEILING - stop targeting this metric' for m in blocked_metrics)}
+
+You MUST choose a target_metric that is NOT in this list. Focus on metrics with more improvement potential.
+"""
+
+        # Build forced intervention section
+        forced_intervention_section = ""
+        if forced_intervention:
+            forced_intervention_section = f"""
+### 🚨 ESCALATION REQUIRED ###
+Due to repeated failures at low scores, the system is forcing intervention level: **{forced_intervention.upper()}**
+
+You MUST set intervention_type = "{forced_intervention}". This is NOT optional.
+{"Use moderate: 3-5 coordinated changes targeting multiple aspects." if forced_intervention == "moderate" else ""}
+{"Use nuclear: Significant redesign. Rethink core mechanics that aren't working." if forced_intervention == "nuclear" else ""}
+"""
+
+        # Build simulation section if data available
+        simulation_section = ""
+        if simulation_analysis:
+            sim_problems = "\n".join(
+                f"- {c.card_name}: {c.issue_type} ({c.evidence})"
+                for c in simulation_analysis.problematic_cards
+            ) or "None detected"
+
+            sim_fixes = "\n".join(
+                f"- {fix}" for fix in simulation_analysis.high_priority_fixes
+            ) or "None"
+
+            # Parse balance adjustments for exact instructions
+            balance_adj_section = ""
+            if simulation_analysis.balance_adjustments:
+                from game_simulator.models.metrics import BalanceAdjustment
+                parsed = BalanceAdjustment.parse_adjustments(simulation_analysis.balance_adjustments)
+                if parsed:
+                    adj_lines = []
+                    for adj in parsed:
+                        if adj.current_value and adj.target_value:
+                            adj_lines.append(f"- {adj.card_name}: {adj.stat} {adj.current_value} → {adj.target_value} ({adj.reason})")
+                        else:
+                            adj_lines.append(f"- {adj.card_name}: {adj.action} {adj.stat} ({adj.reason})")
+                    balance_adj_section = f"""
+### ⚡ EXACT BALANCE FIXES (apply these precisely) ###
+These are DATA-DRIVEN recommendations. Use cards_action=stat_adjust and apply exactly:
+{chr(10).join(adj_lines)}
+"""
+
+            # Confidence warning
+            confidence_warning = ""
+            if simulation_analysis.confidence and simulation_analysis.confidence.overall == "low":
+                confidence_warning = f"\n⚠️ LOW CONFIDENCE ANALYSIS: {'; '.join(simulation_analysis.confidence.reasons)}\n"
+
+            simulation_section = f"""
+### SIMULATION EVIDENCE (EMPIRICAL DATA FROM PLAYTESTING) ###
+⚠️ This data is from ACTUAL SIMULATED GAMES - trust it over theoretical analysis!
+{confidence_warning}
+**Summary:** {simulation_analysis.summary}
+
+**Key Metrics:**
+- Strategic Diversity: {simulation_analysis.strategic_diversity}
+- Pacing: {simulation_analysis.pacing_assessment}
+- Comeback Potential: {simulation_analysis.comeback_potential}
+- First Player Analysis: {simulation_analysis.first_player_analysis}
+{balance_adj_section}
+**Problematic Cards (from gameplay data):**
+{sim_problems}
+
+**High Priority Fixes (from simulation):**
+{sim_fixes}
+
+**Fun Indicators:** {', '.join(simulation_analysis.fun_indicators) or 'None'}
+**Anti-Fun Indicators:** {', '.join(simulation_analysis.anti_fun_indicators) or 'None'}
+
+⚠️ PRIORITIZE: Address issues identified by simulation data - these are PROVEN problems, not guesses!
+"""
+
+        logger.debug("[DirectorAgent] Calling LLM to generate strategy...")
+        strategy = self.llm_service.generate(
             output_model=RefinementStrategy,
             prompt=self.DESIGN_PROMPT,
             overall_score=evaluation.overall_score,
@@ -313,7 +424,21 @@ If the experiment succeeded:
             successful_patterns=successful_patterns,
             failed_patterns=failed_patterns,
             problematic_cards=problematic_cards,
+            simulation_section=simulation_section,
+            blocked_metrics_section=blocked_metrics_section,
+            forced_intervention_section=forced_intervention_section,
         )
+
+        logger.info(f"[DirectorAgent] Strategy generated: {strategy.intervention_type.upper()} "
+                   f"targeting {strategy.target_metric}")
+        logger.info(f"[DirectorAgent] Hypothesis: {strategy.hypothesis[:80]}...")
+        logger.info(f"[DirectorAgent] Expected improvement: +{strategy.expected_improvement} "
+                   f"(confidence: {strategy.confidence})")
+        logger.info(f"[DirectorAgent] Actions - Rules: {strategy.rules_action}, Cards: {strategy.cards_action}")
+        if strategy.cards_to_modify:
+            logger.debug(f"[DirectorAgent] Cards to modify: {strategy.cards_to_modify}")
+
+        return strategy
 
     def reflect(
         self,
@@ -322,7 +447,10 @@ If the experiment succeeded:
         evaluation_after: GameEvaluation,
     ) -> ExperimentReflection:
         """Reflect on experiment results and extract lessons."""
+        logger.info(f"[DirectorAgent] Reflecting on experiment {experiment.iteration}")
         actual_change = (experiment.score_after or 0) - experiment.score_before
+        logger.info(f"[DirectorAgent] Score change: {experiment.score_before:.2f} → "
+                   f"{experiment.score_after:.2f} ({actual_change:+.2f})")
 
         # Build metric changes summary
         metric_changes = []
@@ -368,6 +496,25 @@ If the experiment succeeded:
             )
             if exp.reflection:
                 lines.append(f"    Reflection: {exp.reflection[:80]}...")
+
+        return "\n".join(lines)
+
+    def _format_failed_patterns(self, patterns: List[FailedPattern]) -> str:
+        """Format structured FailedPattern objects for prompt."""
+        if not patterns:
+            return "None yet"
+
+        lines = []
+        for fp in patterns:
+            # Format as actionable blocked combinations
+            target = f"({fp.rules_target})" if fp.rules_target else ""
+            cards_info = f", cards={fp.cards_action}" if fp.cards_action != "none" else ""
+            lines.append(
+                f"- ⛔ BLOCKED: target_metric={fp.target_metric}, "
+                f"rules_action={fp.rules_action}{target}{cards_info} "
+                f"[Iter {fp.iteration}: {fp.score_before:.1f} → {fp.score_after:.1f}, "
+                f"regression={fp.regression:.1f}]"
+            )
 
         return "\n".join(lines)
 
