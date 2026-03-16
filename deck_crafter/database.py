@@ -124,7 +124,15 @@ async def init_db():
             await db.execute("ALTER TABLE games ADD COLUMN refinement_memory TEXT")
         except aiosqlite.OperationalError:
             pass
-        
+        try:
+            await db.execute("ALTER TABLE games ADD COLUMN simulation_analysis TEXT")
+        except aiosqlite.OperationalError:
+            pass
+        try:
+            await db.execute("ALTER TABLE games ADD COLUMN simulation_report TEXT")
+        except aiosqlite.OperationalError:
+            pass
+
         await db.execute("""
             CREATE TABLE IF NOT EXISTS card_images (
                 game_id TEXT NOT NULL,
@@ -144,8 +152,9 @@ async def save_game_state(state: CardGameState):
             INSERT OR REPLACE INTO games
             (game_id, status, preferences, concept, rules, cards, evaluation,
              evaluation_iteration, max_evaluation_iterations, evaluation_threshold,
-             previous_evaluations, refinement_memory, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             previous_evaluations, refinement_memory, simulation_analysis, simulation_report,
+             created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             state.game_id,
             state.status.value if hasattr(state.status, 'value') else state.status,
@@ -159,6 +168,8 @@ async def save_game_state(state: CardGameState):
             state.evaluation_threshold,
             json.dumps([e.model_dump() for e in state.previous_evaluations]) if state.previous_evaluations else None,
             state.refinement_memory.model_dump_json() if state.refinement_memory else None,
+            state.simulation_analysis.model_dump_json() if state.simulation_analysis else None,
+            state.simulation_report.model_dump_json() if state.simulation_report else None,
             state.created_at.isoformat(),
             state.updated_at.isoformat()
         ))
@@ -166,11 +177,19 @@ async def save_game_state(state: CardGameState):
 
 async def get_game_state(game_id: str) -> Optional[CardGameState]:
     """Retrieve a game state from the database."""
+    # Import here to avoid circular dependency
+    try:
+        from game_simulator.models.metrics import GameplayAnalysis, SimulationReport
+    except ImportError:
+        GameplayAnalysis = None
+        SimulationReport = None
+
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("""
             SELECT game_id, status, preferences, concept, rules, cards, evaluation,
                    evaluation_iteration, max_evaluation_iterations, evaluation_threshold,
-                   previous_evaluations, refinement_memory, created_at, updated_at
+                   previous_evaluations, refinement_memory, simulation_analysis, simulation_report,
+                   created_at, updated_at
             FROM games WHERE game_id = ?
         """, (game_id,))
         row = await cursor.fetchone()
@@ -184,11 +203,22 @@ async def get_game_state(game_id: str) -> Optional[CardGameState]:
     evaluation_data = json.loads(row[6]) if row[6] else None
     previous_evals_data = json.loads(row[10]) if row[10] else None
     refinement_memory_data = json.loads(row[11]) if row[11] else None
+    simulation_analysis_data = json.loads(row[12]) if row[12] else None
+    simulation_report_data = json.loads(row[13]) if row[13] else None
 
     # Migrate old 6-metric evaluations to new 5-metric format
     evaluation_data = migrate_evaluation_data(evaluation_data)
     if previous_evals_data:
         previous_evals_data = [migrate_evaluation_data(e) for e in previous_evals_data]
+
+    # Parse simulation data if available
+    simulation_analysis = None
+    if simulation_analysis_data and GameplayAnalysis:
+        simulation_analysis = GameplayAnalysis.model_validate(simulation_analysis_data)
+
+    simulation_report = None
+    if simulation_report_data and SimulationReport:
+        simulation_report = SimulationReport.model_validate(simulation_report_data)
 
     return CardGameState(
         game_id=row[0],
@@ -203,8 +233,10 @@ async def get_game_state(game_id: str) -> Optional[CardGameState]:
         evaluation_threshold=row[9] or 6.0,
         previous_evaluations=[GameEvaluation.model_validate(e) for e in previous_evals_data] if previous_evals_data else None,
         refinement_memory=RefinementMemory.model_validate(refinement_memory_data) if refinement_memory_data else None,
-        created_at=datetime.fromisoformat(row[12]),
-        updated_at=datetime.fromisoformat(row[13])
+        simulation_analysis=simulation_analysis,
+        simulation_report=simulation_report,
+        created_at=datetime.fromisoformat(row[14]),
+        updated_at=datetime.fromisoformat(row[15])
     )
 
 async def save_card_image(game_id: str, card_name: str, image_data: bytes):
