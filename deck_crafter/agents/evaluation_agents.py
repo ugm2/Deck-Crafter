@@ -13,7 +13,9 @@ from deck_crafter.models.evaluation import (
     GameEvaluation,
     EvaluationSummary,
     ValidationResult,
+    ModelScore,
     calculate_weighted_score,
+    METRIC_WEIGHTS,
 )
 from deck_crafter.models.user_preferences import UserPreferences
 from pydantic import BaseModel
@@ -859,3 +861,133 @@ class ValidatorAgent:
             high_level_criteria=high_level_criteria,
             context_data_json=context_data_json
         )
+
+
+class EvaluationMergeAgent:
+    """
+    Merges GameEvaluation results from multiple models into one final evaluation.
+    Uses median scores (robust to outliers) and LLM-generated summary.
+    """
+
+    SUMMARY_PROMPT = """
+    ### ROLE ###
+    You are a chief game design evaluator consolidating feedback from {num_models} independent reviewers.
+
+    ### INDIVIDUAL SUMMARIES ###
+    {model_summaries}
+
+    ### MERGED SCORES ###
+    {merged_scores}
+
+    ### TASK ###
+    Write a single executive summary (2-4 sentences) that captures the consensus view.
+    Where reviewers disagree significantly, note the disagreement.
+    Focus on the most actionable insights.
+
+    ### OUTPUT LANGUAGE ###
+    Language: {language}
+    """
+
+    def __init__(self, llm_service: LLMService):
+        self.llm_service = llm_service
+
+    def merge(
+        self,
+        evaluations: list[tuple[str, GameEvaluation]],
+        language: str = "English",
+    ) -> GameEvaluation:
+        """Merge multiple GameEvaluation results into one.
+
+        Args:
+            evaluations: List of (model_id, GameEvaluation) tuples
+            language: Output language for the merged summary
+        """
+        import statistics
+
+        metrics = list(METRIC_WEIGHTS.keys())
+
+        # Collect per-model scores
+        model_scores_list = []
+        per_metric_scores: dict[str, list[tuple[str, float, object]]] = {m: [] for m in metrics}
+
+        for model_id, evaluation in evaluations:
+            scores_dict = evaluation.get_scores_dict()
+            model_scores_list.append(ModelScore(
+                model_id=model_id,
+                scores=scores_dict,
+                overall_score=evaluation.overall_score,
+            ))
+            for metric in metrics:
+                eval_obj = getattr(evaluation, metric)
+                per_metric_scores[metric].append((model_id, scores_dict[metric], eval_obj))
+
+        # Merge each metric: median score, pick analysis closest to median
+        merged_metrics = {}
+        for metric in metrics:
+            entries = per_metric_scores[metric]
+            scores = [s for _, s, _ in entries]
+            median = statistics.median(scores)
+
+            # Pick the evaluation object whose score is closest to the median
+            closest = min(entries, key=lambda e: abs(e[1] - median))
+            eval_obj = closest[2]
+
+            # Clone with median as the adjusted score
+            merged_eval = eval_obj.model_copy()
+            merged_eval.adjusted_score = round(median, 2)
+            merged_eval.adjustment_reason = (
+                f"Panel median from {len(entries)} models "
+                f"(scores: {', '.join(f'{s:.1f}' for _, s, _ in entries)})"
+            )
+            merged_metrics[metric] = merged_eval
+
+        # Compute weighted overall score from medians
+        merged_scores_dict = {m: merged_metrics[m].final_score for m in metrics}
+        overall = calculate_weighted_score(merged_scores_dict)
+
+        # Generate merged summary via LLM
+        model_summaries = "\n\n".join(
+            f"**{model_id}** (overall: {ev.overall_score:.1f}/10):\n{ev.summary}"
+            for model_id, ev in evaluations
+        )
+        merged_scores_text = "\n".join(
+            f"- {m}: {merged_scores_dict[m]:.1f}/10" for m in metrics
+        )
+
+        try:
+            summary_result = self.llm_service.generate(
+                output_model=EvaluationSummary,
+                prompt=self.SUMMARY_PROMPT,
+                num_models=len(evaluations),
+                model_summaries=model_summaries,
+                merged_scores=merged_scores_text,
+                language=language,
+            )
+            summary = summary_result.summary
+        except Exception as e:
+            logger.warning(f"[EvalMerge] Summary generation failed: {e}")
+            summary = evaluations[0][1].summary  # Fallback to first model's summary
+
+        # Merge suggestions from all evaluations
+        all_suggestions = []
+        for _, ev in evaluations:
+            if ev.synthesized_suggestions:
+                all_suggestions.extend(ev.synthesized_suggestions.high_priority)
+                all_suggestions.extend(ev.synthesized_suggestions.medium_priority)
+
+        merged = GameEvaluation(
+            overall_score=round(overall, 2),
+            summary=summary,
+            balance=merged_metrics["balance"],
+            clarity=merged_metrics["clarity"],
+            playability=merged_metrics["playability"],
+            theme_alignment=merged_metrics["theme_alignment"],
+            innovation=merged_metrics["innovation"],
+            model_scores=model_scores_list,
+        )
+
+        logger.info(
+            f"[EvalMerge] Merged {len(evaluations)} evaluations → {overall:.2f}/10 "
+            f"(per-model: {', '.join(f'{ms.model_id}={ms.overall_score:.1f}' for ms in model_scores_list)})"
+        )
+        return merged

@@ -86,6 +86,13 @@ FidelityEvaluation = ThemeAlignmentEvaluation
 OriginalityEvaluation = InnovationEvaluation
 
 
+class ModelScore(BaseModel):
+    """Per-model score breakdown from panel evaluation."""
+    model_id: str
+    scores: dict[str, float]  # metric_name -> final_score
+    overall_score: float
+
+
 class GameEvaluation(BaseModel):
     """
     The final model that consolidates the evaluations from all specialist agents.
@@ -103,6 +110,9 @@ class GameEvaluation(BaseModel):
 
     # Synthesized suggestions (deduplicated, prioritized)
     synthesized_suggestions: Optional["SynthesizedSuggestions"] = None
+
+    # Multi-model panel scores (set when panel evaluation is used)
+    model_scores: Optional[List[ModelScore]] = None
 
     def get_scores_dict(self) -> dict[str, float]:
         """Return all metric scores as a dictionary (using adjusted scores if available)."""

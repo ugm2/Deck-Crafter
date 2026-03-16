@@ -27,6 +27,14 @@ class Config:
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-pro-preview")
 
+    # Multi-model evaluation panel (all Groq)
+    EVALUATION_PANEL_MODELS: list[str] = [
+        "moonshotai/kimi-k2-instruct",
+        "qwen/qwen3-32b",
+        "llama-3.3-70b-versatile",
+    ]
+    EVALUATION_PANEL_PROVIDER: str = "groq"
+
     LLM_MODEL = GROQ_MODEL if LLM_PROVIDER == "groq" else OLLAMA_MODEL
     LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.5"))
     LLM_MAX_OUTPUT_TOKENS = int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "8192"))

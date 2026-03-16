@@ -320,24 +320,10 @@ def create_premium_llm_service() -> LLMService:
 def create_fallback_llm_service() -> LLMService:
     """Create LLM service with automatic fallback through multiple providers.
 
-    Priority order: Gemini > Sambanova > Groq > OpenRouter > DeepSeek > Ollama
+    Priority order: Groq > Sambanova > OpenRouter > DeepSeek > Gemini > Ollama
     Only providers with configured API keys are included.
     """
     providers = []
-
-    if Config.GEMINI_API_KEY:
-        try:
-            providers.append(GeminiService())
-            logger.info("Added Gemini to fallback chain")
-        except Exception as e:
-            logger.warning(f"Could not initialize Gemini: {e}")
-
-    if Config.SAMBANOVA_API_KEY:
-        try:
-            providers.append(SambanovaService())
-            logger.info("Added Sambanova to fallback chain")
-        except Exception as e:
-            logger.warning(f"Could not initialize Sambanova: {e}")
 
     if Config.GROQ_API_KEY:
         try:
@@ -345,6 +331,13 @@ def create_fallback_llm_service() -> LLMService:
             logger.info("Added Groq to fallback chain")
         except Exception as e:
             logger.warning(f"Could not initialize Groq: {e}")
+
+    if Config.SAMBANOVA_API_KEY:
+        try:
+            providers.append(SambanovaService())
+            logger.info("Added Sambanova to fallback chain")
+        except Exception as e:
+            logger.warning(f"Could not initialize Sambanova: {e}")
 
     if Config.OPENROUTER_API_KEY:
         try:
@@ -359,6 +352,13 @@ def create_fallback_llm_service() -> LLMService:
             logger.info("Added DeepSeek to fallback chain")
         except Exception as e:
             logger.warning(f"Could not initialize DeepSeek: {e}")
+
+    if Config.GEMINI_API_KEY:
+        try:
+            providers.append(GeminiService())
+            logger.info("Added Gemini to fallback chain")
+        except Exception as e:
+            logger.warning(f"Could not initialize Gemini: {e}")
 
     # Always try Ollama as last resort (local, no API key needed)
     try:

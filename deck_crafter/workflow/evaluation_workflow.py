@@ -1,4 +1,6 @@
 import logging
+import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TypedDict
 from langgraph.graph import StateGraph, END
 
@@ -13,7 +15,7 @@ from deck_crafter.models.evaluation import (
     PlayabilityEvaluation,
     ThemeAlignmentEvaluation,
     InnovationEvaluation,
-    GameEvaluation
+    GameEvaluation,
 )
 from deck_crafter.services.llm_service import LLMService
 from deck_crafter.agents.evaluation_agents import (
@@ -25,6 +27,7 @@ from deck_crafter.agents.evaluation_agents import (
     EvaluationSynthesizerAgent,
     CrossMetricReviewAgent,
     SuggestionSynthesizerAgent,
+    EvaluationMergeAgent,
 )
 
 
@@ -235,4 +238,74 @@ def create_multi_agent_evaluation_workflow(llm_service: LLMService) -> StateGrap
     # End after synthesis
     workflow.add_edge("synthesize", END)
 
-    return workflow.compile(checkpointer=create_checkpointer()) 
+    return workflow.compile(checkpointer=create_checkpointer())
+
+
+class PanelEvaluationWorkflow:
+    """
+    Multi-model evaluation panel: runs the full evaluation workflow
+    independently on N models, then merges results.
+    """
+
+    def __init__(self, panel_models: list[str], provider: str = "groq"):
+        from deck_crafter.services.llm_service import GroqService
+        self.panel_models = panel_models
+        self.provider = provider
+        self.services = {
+            model_id: GroqService(model=model_id)
+            for model_id in panel_models
+        }
+        self.merge_agent = EvaluationMergeAgent(
+            next(iter(self.services.values()))
+        )
+
+    def _run_single_evaluation(self, model_id: str, game_state: CardGameState) -> GameEvaluation:
+        """Run the full two-pass evaluation workflow for a single model."""
+        llm_service = self.services[model_id]
+        workflow = create_multi_agent_evaluation_workflow(llm_service)
+        thread_id = f"panel-{model_id}-{uuid.uuid4().hex[:8]}"
+        result = workflow.invoke(
+            {"game_state": game_state},
+            config={"configurable": {"thread_id": thread_id}},
+        )
+        return result["final_evaluation"]
+
+    def invoke(self, state: dict, config: dict = None) -> dict:
+        """Run panel evaluation matching the compiled workflow interface."""
+        game_state = state["game_state"]
+        language = game_state.concept.language if game_state.concept else "English"
+
+        logger.info(f"[PanelEval] Starting panel evaluation with {len(self.panel_models)} models: "
+                    f"{', '.join(self.panel_models)}")
+
+        # Run all models in parallel
+        evaluations: list[tuple[str, GameEvaluation]] = []
+        with ThreadPoolExecutor(max_workers=len(self.panel_models)) as executor:
+            futures = {
+                executor.submit(self._run_single_evaluation, model_id, game_state): model_id
+                for model_id in self.panel_models
+            }
+            for future in as_completed(futures):
+                model_id = futures[future]
+                try:
+                    evaluation = future.result()
+                    evaluations.append((model_id, evaluation))
+                    logger.info(f"[PanelEval] {model_id} scored: {evaluation.overall_score:.2f}")
+                except Exception as e:
+                    logger.error(f"[PanelEval] {model_id} failed: {e}")
+
+        if not evaluations:
+            raise RuntimeError("All panel models failed evaluation")
+
+        if len(evaluations) == 1:
+            logger.warning("[PanelEval] Only 1 model succeeded, using its result directly")
+            merged = evaluations[0][1]
+        else:
+            merged = self.merge_agent.merge(evaluations, language=language)
+
+        logger.info(f"[PanelEval] Merged score: {merged.overall_score:.2f} "
+                    f"(from {len(evaluations)} models)")
+
+        game_state.evaluation = merged
+        game_state.status = GameStatus.EVALUATED
+        return {"final_evaluation": merged, "game_state": game_state}
