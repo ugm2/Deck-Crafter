@@ -170,6 +170,8 @@ Iteration: {iteration}/{max_iterations} ({remaining_iterations} remaining)
 
 {simulation_section}
 
+{compilation_warnings_section}
+
 ### YOUR TASK: DESIGN THE NEXT EXPERIMENT ###
 
 Follow the SCIENTIFIC METHOD:
@@ -270,6 +272,7 @@ If the experiment succeeded:
         simulation_analysis=None,
         forced_intervention: Optional[str] = None,
         blocked_metrics: Optional[List[str]] = None,
+        compilation_warnings: Optional[List[str]] = None,
     ) -> RefinementStrategy:
         """Design the next refinement experiment using scientific method."""
         logger.info(f"[DirectorAgent] Designing experiment for iteration {iteration}/{max_iterations}")
@@ -337,6 +340,23 @@ You MUST set intervention_type = "{forced_intervention}". This is NOT optional.
 {"Use moderate: 3-5 coordinated changes targeting multiple aspects." if forced_intervention == "moderate" else ""}
 {"Use nuclear: Significant redesign. Rethink core mechanics that aren't working." if forced_intervention == "nuclear" else ""}
 """
+
+        # Build compilation warnings section
+        compilation_warnings_section = ""
+        if compilation_warnings:
+            warnings_list = "\n".join(f"- {w}" for w in compilation_warnings)
+            compilation_warnings_section = f"""
+### GAME-BREAKING STRUCTURAL ISSUES (from rule compiler) ###
+The rule compiler detected problems that prevent the game from functioning:
+{warnings_list}
+
+These are NOT design opinions — they are HARD FACTS about broken mechanics.
+- "resource mismatch": Cards reference a resource that rules don't provide (or vice versa). Standardize to ONE name.
+- "win condition unreachable": No card can advance toward the win condition. Either add cards that can, or change the win condition type.
+
+YOU MUST fix these BEFORE any design improvements. A game that can't be played scores 0 on Playability.
+"""
+            logger.info(f"[DirectorAgent] Including {len(compilation_warnings)} compilation warnings in prompt")
 
         # Build simulation section if data available
         simulation_section = ""
@@ -427,6 +447,7 @@ These are DATA-DRIVEN recommendations. Use cards_action=stat_adjust and apply ex
             simulation_section=simulation_section,
             blocked_metrics_section=blocked_metrics_section,
             forced_intervention_section=forced_intervention_section,
+            compilation_warnings_section=compilation_warnings_section,
         )
 
         logger.info(f"[DirectorAgent] Strategy generated: {strategy.intervention_type.upper()} "

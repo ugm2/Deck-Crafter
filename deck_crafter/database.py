@@ -9,6 +9,7 @@ from deck_crafter.models.rules import Rules
 from deck_crafter.models.state import CardGameState, GameStatus, RefinementMemory
 from deck_crafter.models.user_preferences import UserPreferences
 from deck_crafter.models.evaluation import GameEvaluation, calculate_weighted_score
+from deck_crafter.models.chat import ChatMessage
 import sqlite3
 
 
@@ -132,6 +133,10 @@ async def init_db():
             await db.execute("ALTER TABLE games ADD COLUMN simulation_report TEXT")
         except aiosqlite.OperationalError:
             pass
+        try:
+            await db.execute("ALTER TABLE games ADD COLUMN chat_history TEXT")
+        except aiosqlite.OperationalError:
+            pass
 
         await db.execute("""
             CREATE TABLE IF NOT EXISTS card_images (
@@ -153,8 +158,8 @@ async def save_game_state(state: CardGameState):
             (game_id, status, preferences, concept, rules, cards, evaluation,
              evaluation_iteration, max_evaluation_iterations, evaluation_threshold,
              previous_evaluations, refinement_memory, simulation_analysis, simulation_report,
-             created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             chat_history, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             state.game_id,
             state.status.value if hasattr(state.status, 'value') else state.status,
@@ -170,6 +175,7 @@ async def save_game_state(state: CardGameState):
             state.refinement_memory.model_dump_json() if state.refinement_memory else None,
             state.simulation_analysis.model_dump_json() if state.simulation_analysis else None,
             state.simulation_report.model_dump_json() if state.simulation_report else None,
+            json.dumps([m.model_dump(mode="json") for m in state.chat_history]) if state.chat_history else None,
             state.created_at.isoformat(),
             state.updated_at.isoformat()
         ))
@@ -189,7 +195,7 @@ async def get_game_state(game_id: str) -> Optional[CardGameState]:
             SELECT game_id, status, preferences, concept, rules, cards, evaluation,
                    evaluation_iteration, max_evaluation_iterations, evaluation_threshold,
                    previous_evaluations, refinement_memory, simulation_analysis, simulation_report,
-                   created_at, updated_at
+                   chat_history, created_at, updated_at
             FROM games WHERE game_id = ?
         """, (game_id,))
         row = await cursor.fetchone()
@@ -205,6 +211,7 @@ async def get_game_state(game_id: str) -> Optional[CardGameState]:
     refinement_memory_data = json.loads(row[11]) if row[11] else None
     simulation_analysis_data = json.loads(row[12]) if row[12] else None
     simulation_report_data = json.loads(row[13]) if row[13] else None
+    chat_history_data = json.loads(row[14]) if row[14] else None
 
     # Migrate old 6-metric evaluations to new 5-metric format
     evaluation_data = migrate_evaluation_data(evaluation_data)
@@ -235,8 +242,9 @@ async def get_game_state(game_id: str) -> Optional[CardGameState]:
         refinement_memory=RefinementMemory.model_validate(refinement_memory_data) if refinement_memory_data else None,
         simulation_analysis=simulation_analysis,
         simulation_report=simulation_report,
-        created_at=datetime.fromisoformat(row[14]),
-        updated_at=datetime.fromisoformat(row[15])
+        chat_history=[ChatMessage.model_validate(m) for m in chat_history_data] if chat_history_data else None,
+        created_at=datetime.fromisoformat(row[15]),
+        updated_at=datetime.fromisoformat(row[16])
     )
 
 async def save_card_image(game_id: str, card_name: str, image_data: bytes):

@@ -61,16 +61,39 @@ class GameEngine:
         cards_played_by_name: Counter = Counter()
         actions_by_type: Counter = Counter()
 
+        # Failure diagnostics
+        forced_pass_turns = 0
+        resource_starved_turns = 0
+        total_player_turns = 0
+        unaffordable_reasons: Counter = Counter()
+
         # Main game loop
         while not state.game_over and state.turn_number <= self.max_turns:
             current_player = state.current_player
             current_agent = self.agents[state.current_player_idx]
+            total_player_turns += 1
 
             # Start of turn: draw cards and gain resources
             self._start_of_turn(state)
 
             # Get legal actions
             legal_actions = self._get_legal_actions(state)
+
+            # Diagnose turn quality before agent acts
+            playable_cards = [a for a in legal_actions if a.action_type == "play_card"]
+            has_cards_in_hand = len(current_player.hand) > 0
+
+            if not playable_cards:
+                forced_pass_turns += 1
+                if has_cards_in_hand:
+                    resource_starved_turns += 1
+                    # Track which resources are blocking
+                    for card in current_player.hand:
+                        cost = card.properties.get("cost", {})
+                        for res, amount in cost.items():
+                            available = current_player.resources.get(res, 0)
+                            if available < amount:
+                                unaffordable_reasons[res] += 1
 
             # Track cards played this turn
             cards_played_this_turn = 0
@@ -134,6 +157,10 @@ class GameEngine:
             cards_played_by_name=dict(cards_played_by_name),
             total_actions=sum(actions_by_type.values()),
             actions_by_type=dict(actions_by_type),
+            forced_pass_turns=forced_pass_turns,
+            resource_starved_turns=resource_starved_turns,
+            total_player_turns=total_player_turns,
+            unaffordable_reasons=dict(unaffordable_reasons),
             final_state_summary=self._summarize_final_state(state),
         )
 

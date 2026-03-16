@@ -24,6 +24,75 @@ from deck_crafter.game_simulator.models.game_definition import (
 
 logger = logging.getLogger(__name__)
 
+def _extract_resource_name_from_text(text: str) -> str | None:
+    """Extract a resource name from a natural-language string like '3 Mana' or '2 Crédito de Recursos'.
+
+    Looks for the pattern <number> <words> and returns the full resource phrase (lowercased).
+    Supports multi-word resource names (e.g. "Crédito de Recursos").
+    Skips non-resource words like 'cards', 'turns', 'points', 'damage', 'players'.
+    """
+    skip_single = {"card", "cards", "turn", "turns", "point", "points", "damage",
+                    "player", "players", "life", "health", "hp", "round", "rounds",
+                    "fase", "fases", "turno", "turnos", "carta", "cartas", "punto", "puntos",
+                    "vida", "daño", "jugador", "jugadores", "ronda", "rondas",
+                    # Prepositions, articles, conjunctions (ES + EN)
+                    "por", "para", "con", "sin", "cada", "entre", "desde", "hasta",
+                    "el", "la", "los", "las", "un", "una", "al", "del",
+                    "the", "for", "per", "with", "each", "from", "to", "and", "or"}
+    # Match <number> <word(s)> — multi-word resource names like "Puntos de Energía"
+    pattern = r"(\d+)\s+([a-záéíóúñü]+(?:\s+(?:de|del|of)\s+[a-záéíóúñü]+)?)"
+    for m in re.finditer(pattern, text, re.IGNORECASE):
+        phrase = m.group(2).strip().lower()
+        words = phrase.split()
+        # Multi-word phrases are likely resource names even if the first word is generic
+        # e.g. "Puntos de Energía" — "puntos" alone is skip, but the full phrase is a resource
+        if len(words) > 1:
+            return phrase
+        if words[0] not in skip_single and len(words[0]) > 1:
+            return phrase
+    return None
+
+
+def normalize_card_resources(rules: "Rules", cards: list["Card"]) -> list["Card"]:
+    """Normalize card cost strings so resource names match those in the rules.
+
+    Fully data-driven: extracts whatever resource name the rules define,
+    then replaces any different resource name found in card costs.
+    No hardcoded resource lists.
+    """
+    if not rules.resource_mechanics or not cards:
+        return cards
+
+    rules_resource = _extract_resource_name_from_text(rules.resource_mechanics)
+    if not rules_resource:
+        return cards
+
+    changed = 0
+    for card in cards:
+        if not card.cost:
+            continue
+        card_resource = _extract_resource_name_from_text(card.cost)
+        if card_resource and card_resource != rules_resource:
+            # Title-case the replacement, preserving linking words lowercase
+            replacement = " ".join(
+                w if w in ("de", "del", "of") else w.capitalize()
+                for w in rules_resource.split()
+            )
+            new_cost = re.sub(
+                re.escape(card_resource),
+                replacement,
+                card.cost,
+                flags=re.IGNORECASE,
+            )
+            if new_cost != card.cost:
+                card.cost = new_cost
+                changed += 1
+
+    if changed:
+        logger.info(f"[ResourceNormalization] Fixed {changed} card costs to use '{rules_resource}' (matching rules)")
+
+    return cards
+
 
 class ParsedCardEffect(BaseModel):
     """LLM response for parsing a card effect."""
@@ -146,6 +215,148 @@ class RuleCompiler:
         # If resource_mechanics exists but doesn't say "no resources", assume it has resources
         return True
 
+    # Which properties each effect modifies — used for win condition reachability
+    EFFECT_PROPERTIES: dict[CardEffect, set[str]] = {
+        CardEffect.GAIN_POINTS: {"points"},
+        CardEffect.DAMAGE: {"health"},
+        CardEffect.HEAL: {"health"},
+        CardEffect.GAIN_RESOURCE: set(),  # Resources, not properties
+        CardEffect.DRAW: set(),
+        CardEffect.WIN_GAME: set(),  # Handled separately
+        CardEffect.NONE: set(),
+    }
+
+    # Which win condition types require which properties to be modifiable
+    WIN_CONDITION_REQUIREMENTS: dict[str, set[str]] = {
+        "points": {"points"},
+        "elimination": {"health"},
+        "last_standing": {"health"},
+        "empty_deck": set(),  # Always reachable
+    }
+    # "property_threshold" is dynamic — depends on property_name
+
+    def _validate_win_condition(
+        self,
+        win_condition: WinCondition,
+        card_defs: list[CardDefinition],
+    ) -> WinCondition:
+        """Check that at least one card can advance the win condition.
+
+        If unreachable, remap to the best compatible win type based on
+        what effects the cards actually have.
+        """
+        effects = {cd.effect for cd in card_defs}
+
+        # Collect all properties that cards can modify
+        modifiable_properties: set[str] = set()
+        for effect in effects:
+            modifiable_properties |= self.EFFECT_PROPERTIES.get(effect, set())
+
+        # Check reachability
+        if win_condition.type == "property_threshold":
+            # Dynamic: check if the threshold property is modifiable,
+            # or if the property name is a synonym for a known property
+            prop = win_condition.property_name.lower()
+            point_synonyms = {"points", "score", "puntos", "prestigio", "victoria"}
+            health_synonyms = {"health", "life", "hp", "vida", "salud"}
+
+            if any(syn in prop for syn in point_synonyms):
+                required = {"points"}
+            elif any(syn in prop for syn in health_synonyms):
+                required = {"health"}
+            else:
+                required = {win_condition.property_name}
+        else:
+            required = self.WIN_CONDITION_REQUIREMENTS.get(win_condition.type, set())
+
+        # WIN_GAME effect always makes the game reachable
+        if CardEffect.WIN_GAME in effects:
+            return win_condition
+
+        if not required or required & modifiable_properties:
+            return win_condition
+
+        # Win condition is unreachable — find the best alternative
+        original_detail = win_condition.type
+        if win_condition.property_name:
+            original_detail += f" ({win_condition.property_name} >= {win_condition.target_value})"
+
+        # Pick the best alternative based on what cards can actually do
+        if "points" in modifiable_properties:
+            target = win_condition.target_value if win_condition.target_value > 0 else 10
+            new_wc = WinCondition(type="points", target_value=target)
+            reason = "cards can modify points"
+        elif "health" in modifiable_properties:
+            new_wc = WinCondition(type="elimination")
+            reason = "cards can modify health"
+        else:
+            new_wc = WinCondition(type="points", target_value=10)
+            reason = "no cards modify known win properties, defaulting to points"
+
+        msg = (
+            f"Win condition '{original_detail}' is unreachable (no card can advance it). "
+            f"Remapped to '{new_wc.type}' because {reason}."
+        )
+        logger.warning(f"[WinConditionValidation] {msg}")
+        self.warnings.append(msg)
+        return new_wc
+
+    def _reconcile_resources(
+        self,
+        rule_set: RuleSet,
+        card_defs: list[CardDefinition],
+    ) -> list[CardDefinition]:
+        """Detect and fix resource name mismatches between rules and cards.
+
+        The LLM normalizes rule resources (e.g. "Créditos" → "gold") independently
+        from the regex that parses card costs (e.g. "2 Mana" → "mana"). This creates
+        games where no card is ever affordable.
+        """
+        rules_resources = set(rule_set.initial_resources) | set(rule_set.resource_per_turn)
+        card_resources: set[str] = set()
+        for cd in card_defs:
+            card_resources.update(cd.cost.keys())
+
+        # Remove non-resource keys like "discard"
+        card_resources.discard("discard")
+
+        if not rules_resources or not card_resources:
+            return card_defs
+
+        # Resources only in cards, not in rules
+        card_only = card_resources - rules_resources
+        # Resources only in rules, not in cards
+        rules_only = rules_resources - card_resources
+
+        if not card_only:
+            return card_defs  # All card resources exist in rules — no mismatch
+
+        # Simple case: exactly 1 unmatched on each side → auto-remap
+        if len(card_only) == 1 and len(rules_only) == 1:
+            old_name = card_only.pop()
+            new_name = rules_only.pop()
+            logger.warning(
+                f"[ResourceReconciliation] Auto-remapping card costs: "
+                f"'{old_name}' → '{new_name}' (rules define '{new_name}', cards use '{old_name}')"
+            )
+            self.warnings.append(
+                f"Resource mismatch auto-fixed: cards used '{old_name}' but rules define '{new_name}'"
+            )
+            for cd in card_defs:
+                if old_name in cd.cost:
+                    cd.cost[new_name] = cd.cost.pop(old_name)
+        else:
+            # Multiple mismatches — warn but don't guess
+            for res in card_only:
+                msg = (
+                    f"Cards require resource '{res}' but rules never provide it. "
+                    f"Rules define: {sorted(rules_resources)}"
+                )
+                logger.warning(f"[ResourceReconciliation] {msg}")
+                self.warnings.append(msg)
+
+        return card_defs
+
     def compile(
         self,
         rules: Rules,
@@ -170,11 +381,17 @@ class RuleCompiler:
         # Parse cards
         card_defs = [self._parse_card(card) for card in cards]
 
+        # Reconcile resource names between rules and cards
+        card_defs = self._reconcile_resources(rule_set, card_defs)
+
         # Parse win condition
         win_condition = self._parse_win_condition(rules.win_conditions)
 
+        # Validate win condition is reachable by the card effects
+        win_condition = self._validate_win_condition(win_condition, card_defs)
+
         # Ensure health is set for elimination games
-        if win_condition.type == "elimination" and "health" not in rule_set.initial_properties:
+        if win_condition.type in ("elimination", "last_standing") and "health" not in rule_set.initial_properties:
             # Default health: try to extract from rules, else use 20
             health = self._extract_health_from_rules(rules)
             rule_set.initial_properties["health"] = health

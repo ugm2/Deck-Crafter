@@ -57,6 +57,9 @@ class GameplayAnalysisAgent:
     **Automatic Issue Detection:**
     {issues_detected}
 
+    **Root Cause Diagnostics:**
+    {failure_diagnostics}
+
     ### YOUR TASK ###
     Analyze these results and produce insights in these categories:
 
@@ -169,6 +172,12 @@ class GameplayAnalysisAgent:
         # Format issues
         issues_text = "\n".join(f"- {issue}" for issue in report.issues) if report.issues else "No issues automatically detected"
 
+        # Format failure diagnostics
+        if report.failure_reasons:
+            failure_diagnostics = "\n".join(f"- {reason}" for reason in report.failure_reasons)
+        else:
+            failure_diagnostics = "No root cause issues detected"
+
         # Call LLM
         analysis = self.llm_service.generate(
             output_model=GameplayAnalysis,
@@ -187,6 +196,7 @@ class GameplayAnalysisAgent:
             cards_always_played=report.cards_always_played or "None",
             card_win_correlation_summary=card_win_correlation_summary,
             issues_detected=issues_text,
+            failure_diagnostics=failure_diagnostics,
             language=language,
         )
 

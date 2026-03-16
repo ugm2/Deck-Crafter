@@ -30,6 +30,12 @@ def determine_forced_intervention(
     score = state.evaluation.overall_score
     total_failed = memory.total_failed_iterations if memory else 0
 
+    # De-escalate after 3+ consecutive rollbacks — forced intervention is not working
+    if memory and memory.consecutive_rollbacks >= 3:
+        logger.warning(f"[Escalation] DE-ESCALATING: {memory.consecutive_rollbacks} consecutive rollbacks, "
+                       "letting Director choose freely")
+        return None
+
     # Immediate escalation for catastrophically broken games (no failure history needed)
     if score < 3.5:
         logger.warning(f"[Escalation] Forcing NUCLEAR: catastrophic score={score:.2f}")
@@ -42,8 +48,14 @@ def determine_forced_intervention(
     # Simulation-aware escalation: game can't even be played
     if state.simulation_report and hasattr(state.simulation_report, 'completion_rate'):
         if state.simulation_report.completion_rate < 0.1:
-            logger.warning(f"[Escalation] Forcing NUCLEAR: simulation completion {state.simulation_report.completion_rate:.0%}")
-            return "nuclear"
+            if score < 4.5:
+                logger.warning(f"[Escalation] Forcing NUCLEAR: simulation completion {state.simulation_report.completion_rate:.0%} AND low score={score:.2f}")
+                return "nuclear"
+            elif score < 5.5:
+                logger.warning(f"[Escalation] Forcing MODERATE: simulation completion {state.simulation_report.completion_rate:.0%}, score={score:.2f}")
+                return "moderate"
+            else:
+                logger.info(f"[Escalation] Skipping simulation-based escalation: score={score:.2f} is decent despite {state.simulation_report.completion_rate:.0%} completion")
 
     # Existing failure-count escalation
     if score < 5.0 and total_failed >= 3:
@@ -198,7 +210,7 @@ def execute_refinement_step(
     if blocked_metrics:
         logger.info(f"Blocked metrics (ceiling detected): {blocked_metrics}")
 
-    strategy = director_agent.design_experiment(
+    design_kwargs = dict(
         evaluation=state.evaluation,
         threshold=threshold,
         iteration=state.evaluation_iteration + 1,
@@ -209,10 +221,33 @@ def execute_refinement_step(
         simulation_analysis=state.simulation_analysis,
         forced_intervention=forced_intervention,
         blocked_metrics=blocked_metrics,
+        compilation_warnings=state.compilation_warnings or [],
     )
 
-    if memory.check_pattern_blocked(strategy.target_metric, strategy.rules_action, strategy.rules_target):
-        logger.warning("Strategy matches failed pattern - Director should have avoided this!")
+    MAX_PATTERN_RETRIES = 2
+    strategy = director_agent.design_experiment(**design_kwargs)
+    for _retry in range(MAX_PATTERN_RETRIES):
+        if not memory.check_pattern_blocked(strategy.target_metric, strategy.rules_action, strategy.rules_target):
+            break
+        logger.warning(f"Strategy matches failed pattern (retry {_retry + 1}/{MAX_PATTERN_RETRIES}), "
+                       f"re-asking Director: metric={strategy.target_metric}, "
+                       f"rules={strategy.rules_action}({strategy.rules_target})")
+        strategy = director_agent.design_experiment(**design_kwargs)
+    else:
+        if memory.check_pattern_blocked(strategy.target_metric, strategy.rules_action, strategy.rules_target):
+            logger.error("Director keeps repeating blocked pattern after retries, skipping iteration")
+            state.evaluation_iteration += 1
+            state.refinement_memory = memory
+            return RefinementResult(
+                state=state,
+                memory=memory,
+                new_score=current_score,
+                previous_score=previous_score,
+                status="reverted",
+                stop_reason=None,
+                improved=False,
+                actual_improvement=0.0,
+            )
 
     # Code-level override: enforce minimum action levels for forced interventions
     if forced_intervention == "nuclear":
@@ -367,6 +402,11 @@ def execute_refinement_step(
     elif strategy.cards_action == "none":
         logger.info("Skipping cards refinement (Director: cards_action=none)")
 
+    # --- Normalize card resource names to match rules ---
+    if (rules_changed or cards_changed) and state.rules and state.cards:
+        from deck_crafter.game_simulator.rule_compiler import normalize_card_resources
+        normalize_card_resources(state.rules, state.cards)
+
     # --- Re-simulate if needed ---
     if state.simulation_analysis is not None and (rules_changed or cards_changed):
         logger.info("Re-running simulation to validate refinement changes...")
@@ -479,7 +519,7 @@ def execute_refinement_step(
     status = "refined"
     stop_reason = None
 
-    if new_score < previous_score - 0.1:
+    if new_score < previous_score:
         logger.warning(f"ROLLBACK: Score degraded ({previous_score:.1f} → {new_score:.1f})")
 
         failed_pattern = FailedPattern(
@@ -496,6 +536,8 @@ def execute_refinement_step(
         )
         memory.add_failed_pattern(failed_pattern)
         memory.record_failure(strategy.target_metric)
+        memory.consecutive_rollbacks += 1
+        logger.warning(f"Consecutive rollbacks: {memory.consecutive_rollbacks}")
 
         experiment.hypothesis_confirmed = False
         experiment.reflection = f"FAILED: Caused score regression from {previous_score:.1f} to {new_score:.1f}"
@@ -509,6 +551,7 @@ def execute_refinement_step(
         improved = False
         status = "reverted"
     else:
+        memory.consecutive_rollbacks = 0
         # Check stop conditions
         stop, reason = should_stop_refinement(new_score, state, threshold)
         if stop:

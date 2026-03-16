@@ -11,6 +11,7 @@ from deck_crafter.models.game_concept import GameConcept
 from deck_crafter.models.rules import Rules
 from deck_crafter.models.user_preferences import UserPreferences
 from deck_crafter.models.evaluation import GameEvaluation
+from deck_crafter.models.chat import ChatMessage
 
 # Forward reference for simulation analysis (optional import to avoid circular deps)
 try:
@@ -104,6 +105,7 @@ class RefinementMemory(BaseModel):
     # NEW: Escalation tracking
     total_failed_iterations: int = 0
     last_improvement_iteration: int = 0
+    consecutive_rollbacks: int = 0
 
     def record_failure(self, metric: str) -> None:
         """Record a metric failure and check for ceiling."""
@@ -288,6 +290,9 @@ class CardGameState(BaseModel):
     simulation_report: Optional["SimulationReport"] = None
     # Compilation warnings from rule compiler (surfaced to Clarity evaluation)
     compilation_warnings: List[str] = Field(default_factory=list)
+
+    # Conversational editing history
+    chat_history: Optional[List["ChatMessage"]] = None
 
     def get_refinement_progress(self) -> Optional["RefinementProgress"]:
         """Calculate refinement progress if evaluation exists."""

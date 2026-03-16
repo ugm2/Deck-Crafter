@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from typing import Dict, Any
+import logging
 import uuid
 from datetime import datetime, timezone
 import base64
@@ -18,15 +19,18 @@ from deck_crafter.workflow.specific_workflows import (
     create_multi_agent_evaluation_workflow,
     create_refinement_workflow
 )
+from deck_crafter.workflow.evaluation_workflow import PanelEvaluationWorkflow
 from deck_crafter.services.llm_service import create_llm_service, create_fallback_llm_service, GeminiService, GroqService
 from deck_crafter.utils.config import Config as LLMConfig
 from deck_crafter.models.state import CardGameState, GameStatus, RefinementMemory
+from deck_crafter.models.chat import ChatMessage, ChatAction
 from deck_crafter.utils.config import Config
 from deck_crafter.database import init_db, save_game_state as save_game_state_to_db, get_game_state as get_game_state_from_db, get_all_card_images
 
 # Simulation imports
 from deck_crafter.game_simulator.integration import run_simulation_for_game, analyze_game
 from deck_crafter.game_simulator.analysis_agent import GameplayAnalysisAgent
+from deck_crafter.game_simulator.rule_compiler import normalize_card_resources
 
 router = APIRouter()
 
@@ -68,12 +72,25 @@ else:
     )
 
 # Standard workflows
+_panel_eval = None
+if Config.GROQ_API_KEY and len(Config.EVALUATION_PANEL_MODELS) > 1:
+    try:
+        _panel_eval = PanelEvaluationWorkflow(
+            panel_models=Config.EVALUATION_PANEL_MODELS,
+            provider=Config.EVALUATION_PANEL_PROVIDER,
+        )
+        logging.getLogger(__name__).info(
+            f"Panel evaluation enabled with {len(Config.EVALUATION_PANEL_MODELS)} models"
+        )
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Panel evaluation init failed, using single-model: {e}")
+
 standard_workflows = {
     'preferences': create_preferences_workflow(standard_llm_service),
     'concept_and_rules': create_concept_and_rules_workflow(standard_llm_service),
     'cards': create_cards_workflow(standard_llm_service),
     'images': create_image_generation_workflow(standard_llm_service),
-    'evaluation': create_multi_agent_evaluation_workflow(standard_llm_service),
+    'evaluation': _panel_eval or create_multi_agent_evaluation_workflow(standard_llm_service),
     'refinement': create_refinement_workflow(standard_llm_service),
 }
 
@@ -108,13 +125,15 @@ def get_workflows(premium: bool = False, premium_provider: str = "gemini", model
             'concept_and_rules': create_concept_and_rules_workflow(llm),
             'cards': create_cards_workflow(llm),
             'images': create_image_generation_workflow(llm),
-            'evaluation': create_multi_agent_evaluation_workflow(llm),
+            'evaluation': _panel_eval or create_multi_agent_evaluation_workflow(llm),
             'refinement': create_refinement_workflow(llm),
         }
     return _premium_workflows_cache[cache_key]
 
 def _get_evaluation_workflow(provider: str, model: str = None):
     """Get a cached evaluation workflow for a specific provider/model."""
+    if _panel_eval:
+        return _panel_eval
     cache_key = f"eval:{provider}:{model or 'default'}"
     if cache_key not in _premium_workflows_cache:
         llm = _create_premium_llm(provider, model)
@@ -123,7 +142,6 @@ def _get_evaluation_workflow(provider: str, model: str = None):
 
 
 # --- Escalation and Mandatory Simulation Helpers ---
-import logging
 logger = logging.getLogger(__name__)
 
 
@@ -671,7 +689,7 @@ async def refine_game(
 
     await save_game_state_to_db(state)
 
-    final_score = state.evaluation.overall_score
+    final_score = state.best_score_achieved or state.evaluation.overall_score
     return {
         "status": "refined",
         "iterations_used": state.evaluation_iteration,
@@ -695,7 +713,7 @@ class GenerateCompleteRequest(BaseModel):
     """Request for the complete game generation pipeline."""
     preferences: UserPreferences
     target_threshold: float = Field(default=7.0, ge=1.0, le=10.0)
-    max_refinement_iterations: int = Field(default=5, ge=1, le=10)
+    max_refinement_iterations: int = Field(default=5, ge=1, le=30)
     num_simulation_games: int = Field(default=30, ge=10, le=100)
     premium: bool = False
     premium_provider: str = "gemini"
@@ -792,6 +810,8 @@ async def generate_complete(request: GenerateCompleteRequest):
             config={"configurable": {"thread_id": f"cards-{game_id}"}}
         )
         state = CardGameState(**result)
+        if state.rules and state.cards:
+            normalize_card_resources(state.rules, state.cards)
         stages_completed.append("cards_generated")
         logger.info(f"[generate-complete] Generated {len(state.cards)} cards")
 
@@ -882,6 +902,9 @@ async def generate_complete(request: GenerateCompleteRequest):
             logger.info(f"[generate-complete] Iteration {iteration}: {ref_result.new_score:.2f} "
                        f"({ref_result.status}, Director: {strategy_info})")
 
+            # Save after every iteration to avoid losing progress
+            await save_game_state_to_db(state)
+
             if ref_result.stop_reason:
                 logger.info(f"[generate-complete] Stopping: {ref_result.stop_reason}")
                 break
@@ -891,7 +914,7 @@ async def generate_complete(request: GenerateCompleteRequest):
         # =================================================================
         await save_game_state_to_db(state)
 
-        final_score = state.evaluation.overall_score
+        final_score = state.best_score_achieved or state.evaluation.overall_score
         total_improvement = final_score - initial_score
 
         return GenerateCompleteResponse(
@@ -918,3 +941,107 @@ async def generate_complete(request: GenerateCompleteRequest):
             stages_completed=stages_completed,
             error=str(e),
         )
+
+
+# =================================================================
+# CHAT: Conversational game editing
+# =================================================================
+
+class ChatRequest(BaseModel):
+    message: str
+    run_evaluation: bool = False
+    num_simulation_games: int = 30
+
+
+class ChatEndpointResponse(BaseModel):
+    message: str
+    actions_taken: list[dict]
+    state_changed: bool
+    evaluation_ran: bool
+    score_before: float | None = None
+    score_after: float | None = None
+    game_state_summary: dict | None = None
+
+
+# Per-game orchestrator instances (keeps undo stack alive within server session)
+_orchestrators: dict[str, "OrchestratorAgent"] = {}
+
+
+def _get_orchestrator(game_id: str):
+    from deck_crafter.agents.orchestrator_agent import OrchestratorAgent
+    if game_id not in _orchestrators:
+        llm = GroqService(model="qwen/qwen3-32b")
+        _orchestrators[game_id] = OrchestratorAgent(llm)
+    return _orchestrators[game_id]
+
+
+@router.post("/{game_id}/chat", response_model=ChatEndpointResponse)
+async def chat_with_game(game_id: str, request: ChatRequest):
+    """Chat with the game editing assistant to modify, query, or evaluate a game."""
+    state = await get_game_state_from_db(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+
+    orchestrator = _get_orchestrator(game_id)
+    chat_history = state.chat_history or []
+
+    score_before = state.evaluation.overall_score if state.evaluation else None
+
+    # Get eval workflow for improve/evaluate actions
+    eval_workflow = _panel_eval or standard_workflows.get("evaluation")
+
+    # Run orchestrator
+    state, response_text, actions, eval_ran = orchestrator.process_message(
+        message=request.message,
+        state=state,
+        chat_history=chat_history,
+        run_eval=request.run_evaluation,
+        eval_workflow=eval_workflow,
+        num_sim_games=request.num_simulation_games,
+    )
+
+    score_after = state.evaluation.overall_score if state.evaluation else None
+    state_changed = any(a.success and a.intent not in ("query", "explain") for a in actions)
+
+    # Update chat history
+    user_msg = ChatMessage(role="user", content=request.message)
+    assistant_msg = ChatMessage(
+        role="assistant",
+        content=response_text,
+        actions=[ChatAction(intent=a.intent, description=a.description, target=a.target, success=a.success) for a in actions],
+    )
+    chat_history.append(user_msg)
+    chat_history.append(assistant_msg)
+    state.chat_history = chat_history
+
+    # Save
+    state.updated_at = datetime.now(timezone.utc)
+    await save_game_state_to_db(state)
+
+    # Build summary
+    summary = {
+        "title": state.concept.title if state.concept else None,
+        "score": score_after,
+        "card_count": len(state.cards) if state.cards else 0,
+        "iteration": state.evaluation_iteration,
+    }
+
+    return ChatEndpointResponse(
+        message=response_text,
+        actions_taken=[a.model_dump() for a in actions],
+        state_changed=state_changed,
+        evaluation_ran=eval_ran,
+        score_before=score_before,
+        score_after=score_after,
+        game_state_summary=summary,
+    )
+
+
+@router.get("/{game_id}/chat/history")
+async def get_chat_history(game_id: str):
+    """Get the conversation history for a game."""
+    state = await get_game_state_from_db(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+    history = state.chat_history or []
+    return [m.model_dump() for m in history]

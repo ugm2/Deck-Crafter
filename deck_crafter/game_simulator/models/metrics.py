@@ -22,6 +22,12 @@ class GameMetrics(BaseModel):
     total_actions: int = 0
     actions_by_type: dict[str, int] = Field(default_factory=dict)
 
+    # Failure diagnostics
+    forced_pass_turns: int = 0  # Turns where only legal action was pass
+    resource_starved_turns: int = 0  # Turns where player had cards but none playable
+    total_player_turns: int = 0  # Total turn-slots for rate calculation
+    unaffordable_reasons: dict[str, int] = Field(default_factory=dict)  # "mana" -> N times
+
     # Game state at end
     final_state_summary: dict[str, Any] = Field(default_factory=dict)
 
@@ -59,6 +65,9 @@ class SimulationReport(BaseModel):
 
     # Issues detected
     issues: list[str] = Field(default_factory=list)
+
+    # Root cause diagnostics (why games fail, not just symptoms)
+    failure_reasons: list[str] = Field(default_factory=list)
 
     @classmethod
     def from_metrics(
@@ -173,6 +182,42 @@ class SimulationReport(BaseModel):
                     f"(avg is {avg_win_correlation:.1%})"
                 )
 
+        # Root cause analysis from engine diagnostics
+        failure_reasons = []
+
+        total_player_turns = sum(m.total_player_turns for m in metrics)
+        total_forced_passes = sum(m.forced_pass_turns for m in metrics)
+        total_resource_starved = sum(m.resource_starved_turns for m in metrics)
+
+        if total_player_turns > 0:
+            forced_pass_rate = total_forced_passes / total_player_turns
+            resource_starved_rate = total_resource_starved / total_player_turns
+
+            if resource_starved_rate > 0.5:
+                all_reasons: Counter = Counter()
+                for m in metrics:
+                    all_reasons.update(m.unaffordable_reasons)
+                top_reasons = all_reasons.most_common(3)
+                reason_detail = ", ".join(f"'{r}' ({c}x)" for r, c in top_reasons)
+                failure_reasons.append(
+                    f"{resource_starved_rate:.0%} of turns were resource-starved "
+                    f"(players had cards but couldn't afford them). "
+                    f"Top blockers: {reason_detail}"
+                )
+
+            if forced_pass_rate > 0.7:
+                failure_reasons.append(
+                    f"{forced_pass_rate:.0%} of turns were forced passes "
+                    f"(no playable action available)"
+                )
+
+        if not games_completed and total_resource_starved > 0:
+            failure_reasons.append(
+                "No games completed and players were consistently resource-starved. "
+                "This likely indicates a resource system mismatch "
+                "(cards require resources that the rules never provide)."
+            )
+
         return cls(
             game_name=game_name,
             games_run=games_run,
@@ -191,6 +236,7 @@ class SimulationReport(BaseModel):
             card_win_correlation=card_win_correlation,
             game_metrics=metrics,
             issues=issues,
+            failure_reasons=failure_reasons,
         )
 
 
