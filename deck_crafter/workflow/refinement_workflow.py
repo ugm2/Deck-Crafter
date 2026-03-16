@@ -17,6 +17,7 @@ class RefinementState(TypedDict):
     game_state: CardGameState
     feedback: Optional[RefinementFeedback]
     should_stop: bool
+    skip_evaluation: bool
 
 
 def create_refinement_workflow(llm_service: LLMService) -> StateGraph:
@@ -134,6 +135,13 @@ def create_refinement_workflow(llm_service: LLMService) -> StateGraph:
     def run_evaluation(state: RefinementState) -> dict:
         """Re-evaluate the game after regeneration."""
         game_state = state['game_state']
+
+        # When caller handles evaluation externally (e.g. generate-complete
+        # with a separate eval model), skip the internal eval to save LLM calls.
+        if state.get('skip_evaluation', False):
+            game_state.evaluation_iteration += 1
+            print(f"--- REFINEMENT: Skipping internal evaluation (handled externally), iteration {game_state.evaluation_iteration} ---")
+            return {"game_state": game_state, "should_stop": True}
 
         print("--- REFINEMENT: Re-evaluating game ---")
 
