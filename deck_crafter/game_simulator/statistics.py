@@ -3,11 +3,11 @@ Statistical simulation runner.
 Runs multiple games and aggregates metrics.
 """
 
-from game_simulator.models.game_definition import GameDefinition
-from game_simulator.models.metrics import GameMetrics, SimulationReport
-from game_simulator.agents.base import PlayerAgent
-from game_simulator.agents.random_agent import RandomAgent
-from game_simulator.engine import GameEngine
+from deck_crafter.game_simulator.models.game_definition import GameDefinition
+from deck_crafter.game_simulator.models.metrics import GameMetrics, SimulationReport
+from deck_crafter.game_simulator.agents.base import PlayerAgent
+from deck_crafter.game_simulator.agents.random_agent import RandomAgent
+from deck_crafter.game_simulator.engine import GameEngine
 
 
 class SimulationRunner:

@@ -1,6 +1,6 @@
 import random
-from game_simulator.game_state_manager import GameStateManager
-from game_simulator.ai_agents import PlayerAgent, CoherenceAgent, GameMasterAgent
+from deck_crafter.game_simulator.game_state_manager import GameStateManager
+from deck_crafter.game_simulator.ai_agents import PlayerAgent, CoherenceAgent, GameMasterAgent
 from pydantic import BaseModel
 
 def log_model_state(title: str, model_instance: BaseModel):

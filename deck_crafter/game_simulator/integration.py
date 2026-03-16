@@ -16,12 +16,12 @@ from deck_crafter.services.llm_service import LLMService
 
 from typing import Literal
 
-from game_simulator.rule_compiler import compile_game
-from game_simulator.statistics import SimulationRunner
-from game_simulator.analysis_agent import GameplayAnalysisAgent
-from game_simulator.models.metrics import SimulationReport, GameplayAnalysis
-from game_simulator.cache import get_cached_report, cache_report
-from game_simulator.agents.strategic_agent import StrategicAgent, HeuristicAgent
+from deck_crafter.game_simulator.rule_compiler import compile_game
+from deck_crafter.game_simulator.statistics import SimulationRunner
+from deck_crafter.game_simulator.analysis_agent import GameplayAnalysisAgent
+from deck_crafter.game_simulator.models.metrics import SimulationReport, GameplayAnalysis
+from deck_crafter.game_simulator.cache import get_cached_report, cache_report
+from deck_crafter.game_simulator.agents.strategic_agent import StrategicAgent, HeuristicAgent
 
 AgentType = Literal["random", "heuristic", "strategic"]
 

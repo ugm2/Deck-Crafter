@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from deck_crafter.models.rules import Rules
 from deck_crafter.models.card import Card
-from game_simulator.models.game_definition import (
+from deck_crafter.game_simulator.models.game_definition import (
     GameDefinition,
     CardDefinition,
     CardEffect,

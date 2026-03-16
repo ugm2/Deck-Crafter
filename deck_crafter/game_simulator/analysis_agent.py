@@ -8,7 +8,7 @@ This agent reads SimulationReport data and produces actionable analysis that can
 """
 import logging
 
-from game_simulator.models.metrics import SimulationReport, GameplayAnalysis, AnalysisConfidence
+from deck_crafter.game_simulator.models.metrics import SimulationReport, GameplayAnalysis, AnalysisConfidence
 from deck_crafter.services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)

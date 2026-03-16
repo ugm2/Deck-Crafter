@@ -8,7 +8,7 @@ These games are designed to validate that the simulator correctly detects:
 - Balanced gameplay
 """
 
-from game_simulator.models.game_definition import (
+from deck_crafter.game_simulator.models.game_definition import (
     GameDefinition,
     CardDefinition,
     CardEffect,

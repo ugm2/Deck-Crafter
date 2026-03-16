@@ -292,7 +292,7 @@ class CardGenerationAgent:
 
         # Exact balance adjustments (highest priority)
         if analysis.balance_adjustments:
-            from game_simulator.models.metrics import BalanceAdjustment
+            from deck_crafter.game_simulator.models.metrics import BalanceAdjustment
             parsed = BalanceAdjustment.parse_adjustments(analysis.balance_adjustments)
             if parsed:
                 lines.append("⚡ EXACT STAT CHANGES REQUIRED (from simulation data):")

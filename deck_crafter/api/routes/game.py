@@ -25,8 +25,8 @@ from deck_crafter.utils.config import Config
 from deck_crafter.database import init_db, save_game_state as save_game_state_to_db, get_game_state as get_game_state_from_db, get_all_card_images
 
 # Simulation imports
-from game_simulator.integration import run_simulation_for_game, analyze_game
-from game_simulator.analysis_agent import GameplayAnalysisAgent
+from deck_crafter.game_simulator.integration import run_simulation_for_game, analyze_game
+from deck_crafter.game_simulator.analysis_agent import GameplayAnalysisAgent
 
 router = APIRouter()
 

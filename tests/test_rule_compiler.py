@@ -5,8 +5,8 @@ Tests for the rule compiler.
 import pytest
 from deck_crafter.models.rules import Rules, TurnPhase
 from deck_crafter.models.card import Card
-from game_simulator.rule_compiler import RuleCompiler, compile_game
-from game_simulator.models.game_definition import CardEffect
+from deck_crafter.game_simulator.rule_compiler import RuleCompiler, compile_game
+from deck_crafter.game_simulator.models.game_definition import CardEffect
 
 
 class TestRuleCompiler:
@@ -207,7 +207,7 @@ class TestSimulationWithCompiledGame:
 
     def test_compiled_game_simulates(self):
         """Test that a compiled game runs in the simulator."""
-        from game_simulator.statistics import run_quick_simulation
+        from deck_crafter.game_simulator.statistics import run_quick_simulation
 
         rules = Rules(
             deck_preparation="Shuffle all cards.",

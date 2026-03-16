@@ -7,14 +7,14 @@ import random
 import uuid
 from collections import Counter
 
-from game_simulator.models.state import (
+from deck_crafter.game_simulator.models.state import (
     GameSimulationState,
     PlayerState,
     CardInstance,
 )
-from game_simulator.models.game_definition import GameDefinition, CardEffect
-from game_simulator.models.metrics import GameMetrics
-from game_simulator.agents.base import PlayerAgent, Action
+from deck_crafter.game_simulator.models.game_definition import GameDefinition, CardEffect
+from deck_crafter.game_simulator.models.metrics import GameMetrics
+from deck_crafter.game_simulator.agents.base import PlayerAgent, Action
 
 
 class GameEngine:

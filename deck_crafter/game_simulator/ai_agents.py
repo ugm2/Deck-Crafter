@@ -1,6 +1,6 @@
 import json
-from game_simulator.llm_service import llm_service
-from game_simulator.simulation_models import (
+from deck_crafter.game_simulator.llm_service import llm_service
+from deck_crafter.game_simulator.simulation_models import (
     GameState, 
     CoherenceReport, 
     PlayerAction, 

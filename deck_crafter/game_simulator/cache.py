@@ -13,7 +13,7 @@ import diskcache
 
 from deck_crafter.models.rules import Rules
 from deck_crafter.models.card import Card
-from game_simulator.models.metrics import SimulationReport
+from deck_crafter.game_simulator.models.metrics import SimulationReport
 
 logger = logging.getLogger(__name__)
 

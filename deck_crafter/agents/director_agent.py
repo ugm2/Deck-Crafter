@@ -353,7 +353,7 @@ You MUST set intervention_type = "{forced_intervention}". This is NOT optional.
             # Parse balance adjustments for exact instructions
             balance_adj_section = ""
             if simulation_analysis.balance_adjustments:
-                from game_simulator.models.metrics import BalanceAdjustment
+                from deck_crafter.game_simulator.models.metrics import BalanceAdjustment
                 parsed = BalanceAdjustment.parse_adjustments(simulation_analysis.balance_adjustments)
                 if parsed:
                     adj_lines = []

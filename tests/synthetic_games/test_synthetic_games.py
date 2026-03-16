@@ -4,8 +4,8 @@ Each synthetic game has known expected properties that the simulator should dete
 """
 
 import pytest
-from game_simulator.synthetic_games import get_synthetic_game, get_all_synthetic_games
-from game_simulator.statistics import run_quick_simulation
+from deck_crafter.game_simulator.synthetic_games import get_synthetic_game, get_all_synthetic_games
+from deck_crafter.game_simulator.statistics import run_quick_simulation
 
 
 class TestIWinGame:

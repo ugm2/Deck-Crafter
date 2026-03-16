@@ -29,8 +29,8 @@ from deck_crafter.workflow.specific_workflows import (
 )
 
 # Import simulation components
-from game_simulator.integration import run_simulation_for_game
-from game_simulator.analysis_agent import GameplayAnalysisAgent
+from deck_crafter.game_simulator.integration import run_simulation_for_game
+from deck_crafter.game_simulator.analysis_agent import GameplayAnalysisAgent
 
 
 @pytest.fixture(scope="module")

@@ -1,6 +1,6 @@
 # game_state_manager.py
 from typing import Dict, Any, List
-from game_simulator.simulation_models import GameState, PlayerState
+from deck_crafter.game_simulator.simulation_models import GameState, PlayerState
 import dpath
 
 class GameStateManager:

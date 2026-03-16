@@ -179,7 +179,7 @@ async def get_game_state(game_id: str) -> Optional[CardGameState]:
     """Retrieve a game state from the database."""
     # Import here to avoid circular dependency
     try:
-        from game_simulator.models.metrics import GameplayAnalysis, SimulationReport
+        from deck_crafter.game_simulator.models.metrics import GameplayAnalysis, SimulationReport
     except ImportError:
         GameplayAnalysis = None
         SimulationReport = None

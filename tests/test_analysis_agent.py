@@ -5,16 +5,16 @@ Tests for the GameplayAnalysisAgent.
 import pytest
 from unittest.mock import MagicMock, patch
 
-from game_simulator.models.metrics import (
+from deck_crafter.game_simulator.models.metrics import (
     SimulationReport,
     GameMetrics,
     GameplayAnalysis,
     ProblematicCard,
     PacingIssue,
 )
-from game_simulator.analysis_agent import GameplayAnalysisAgent
-from game_simulator.synthetic_games import get_synthetic_game
-from game_simulator.statistics import run_quick_simulation
+from deck_crafter.game_simulator.analysis_agent import GameplayAnalysisAgent
+from deck_crafter.game_simulator.synthetic_games import get_synthetic_game
+from deck_crafter.game_simulator.statistics import run_quick_simulation
 
 
 class TestGameplayAnalysisModels:

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from pydantic import BaseModel
 from typing import Literal
 
-from game_simulator.models.state import GameSimulationState, CardInstance
+from deck_crafter.game_simulator.models.state import GameSimulationState, CardInstance
 
 
 class Action(BaseModel):

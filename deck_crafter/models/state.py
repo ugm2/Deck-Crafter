@@ -14,7 +14,7 @@ from deck_crafter.models.evaluation import GameEvaluation
 
 # Forward reference for simulation analysis (optional import to avoid circular deps)
 try:
-    from game_simulator.models.metrics import GameplayAnalysis, SimulationReport
+    from deck_crafter.game_simulator.models.metrics import GameplayAnalysis, SimulationReport
 except ImportError:
     GameplayAnalysis = None
     SimulationReport = None

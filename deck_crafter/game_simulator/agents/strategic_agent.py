@@ -9,8 +9,8 @@ and choose actions strategically. Useful for:
 """
 
 from pydantic import BaseModel, Field
-from game_simulator.agents.base import PlayerAgent, Action
-from game_simulator.models.state import GameSimulationState, CardInstance
+from deck_crafter.game_simulator.agents.base import PlayerAgent, Action
+from deck_crafter.game_simulator.models.state import GameSimulationState, CardInstance
 from deck_crafter.services.llm_service import LLMService
 
 

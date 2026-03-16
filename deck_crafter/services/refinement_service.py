@@ -11,8 +11,8 @@ from deck_crafter.models.state import (
     RefinementMemory, RefinementExperiment,
 )
 from deck_crafter.services.llm_service import LLMService
-from game_simulator.integration import run_simulation_for_game
-from game_simulator.analysis_agent import GameplayAnalysisAgent
+from deck_crafter.game_simulator.integration import run_simulation_for_game
+from deck_crafter.game_simulator.analysis_agent import GameplayAnalysisAgent
 
 logger = logging.getLogger(__name__)
 

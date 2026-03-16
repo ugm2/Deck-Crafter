@@ -6,8 +6,8 @@ Run with: python -m game_simulator.test_real_game [--llm]
 import sqlite3
 import json
 import os
-from game_simulator.rule_compiler import compile_game
-from game_simulator.statistics import run_quick_simulation
+from deck_crafter.game_simulator.rule_compiler import compile_game
+from deck_crafter.game_simulator.statistics import run_quick_simulation
 from deck_crafter.models.rules import Rules
 from deck_crafter.models.card import Card
 
