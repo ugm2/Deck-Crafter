@@ -293,9 +293,9 @@ def create_llm_service(provider: str = "ollama", **kwargs) -> LLMService:
 
 
 def create_premium_llm_service() -> LLMService:
-    """Create premium LLM service using Gemini 3.1 Flash Lite.
+    """Create premium LLM service using Gemini or Groq.
 
-    Falls back to Groq, then standard fallback chain if not available.
+    Falls back to standard fallback chain if not available.
     """
     if Config.GEMINI_API_KEY:
         try:
