@@ -164,3 +164,6 @@ cython_debug/
 output*.json
 
 deck_crafter.db
+
+# Simulation cache
+.simulation_cache/
