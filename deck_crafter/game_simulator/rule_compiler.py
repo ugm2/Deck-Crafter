@@ -71,7 +71,8 @@ def normalize_card_resources(rules: "Rules", cards: list["Card"]) -> list["Card"
     for card in cards:
         if not card.cost:
             continue
-        card_resource = _extract_resource_name_from_text(card.cost)
+        cost_str = str(card.cost) if not isinstance(card.cost, str) else card.cost
+        card_resource = _extract_resource_name_from_text(cost_str)
         if card_resource and card_resource != rules_resource:
             # Title-case the replacement, preserving linking words lowercase
             replacement = " ".join(
@@ -81,10 +82,10 @@ def normalize_card_resources(rules: "Rules", cards: list["Card"]) -> list["Card"
             new_cost = re.sub(
                 re.escape(card_resource),
                 replacement,
-                card.cost,
+                cost_str,
                 flags=re.IGNORECASE,
             )
-            if new_cost != card.cost:
+            if new_cost != cost_str:
                 card.cost = new_cost
                 changed += 1
 

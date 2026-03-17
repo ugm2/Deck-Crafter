@@ -813,18 +813,32 @@ Match the game's language and theme."""
             # 2. Snapshot before changes
             snapshot = state.model_dump_json()
 
-            # 3. Execute actions
-            actions = []
-            for planned in plan.actions:
-                action, new_state, changed = self._execute_action(planned, state, eval_workflow, num_sim_games)
-                actions.append(action)
-                if changed:
-                    state = new_state
+            try:
+                # 3. Execute actions
+                actions = []
+                for planned in plan.actions:
+                    action, new_state, changed = self._execute_action(planned, state, eval_workflow, num_sim_games)
+                    actions.append(action)
+                    if changed:
+                        state = new_state
 
-            # 4. Evaluate
-            eval_action, state = self._run_evaluation(state, eval_workflow, num_sim_games)
-            actions.append(eval_action)
-            score_after = state.evaluation.overall_score if state.evaluation else 0.0
+                # 4. Evaluate
+                eval_action, state = self._run_evaluation(state, eval_workflow, num_sim_games)
+                actions.append(eval_action)
+                score_after = state.evaluation.overall_score if state.evaluation else 0.0
+            except Exception as e:
+                logger.exception(f"[Refinement] Iteration {iteration_num} crashed: {e}")
+                # Restore from snapshot
+                try:
+                    state = CardGameState.model_validate_json(snapshot)
+                except Exception:
+                    pass
+                memory.total_failed_iterations += 1
+                memory.lessons_learned.append(f"Iteration {iteration_num}: CRASHED ({e})")
+                actions = []
+                if on_iteration:
+                    on_iteration(iteration_num, state, score_before, score_before, actions, False)
+                continue
 
             # 5. Compare & decide
             delta = score_after - score_before
@@ -848,7 +862,10 @@ Match the game's language and theme."""
                     state.best_score_achieved = score_after
             else:
                 # Rollback
-                state = CardGameState.model_validate_json(snapshot)
+                try:
+                    state = CardGameState.model_validate_json(snapshot)
+                except Exception as e:
+                    logger.error(f"[Refinement] Rollback deserialization failed: {e}")
                 memory.consecutive_rollbacks += 1
                 memory.total_failed_iterations += 1
                 memory.lessons_learned.append(
